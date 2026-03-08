@@ -53,45 +53,46 @@ void setOutput(uint8_t outputNumber, boolean state) {
 
   // Save the new state
   outputState[outputNumber] = state;
+  boolean written_state = state ^ prefs.outputInvert[outputNumber];
 
   switch (outputNumber) {
     case 0:
-      if (state == LOW)
+      if (written_state == LOW)
         *portAOut &= CLEARBIT15;
       else
         *portAOut |= SETBIT15;
       break;
 
     case 1:
-      if (state == LOW)
+      if (written_state == LOW)
         *portBOut &= CLEARBIT30;
       else
         *portBOut |= SETBIT30;
       break;
 
     case 2:
-      if (state == LOW)
+      if (written_state == LOW)
         *portBOut &= CLEARBIT17;
       else
         *portBOut |= SETBIT17;
       break;
 
     case 3:
-      if (state == LOW)
+      if (written_state == LOW)
         *portBOut &= CLEARBIT09;
       else
         *portBOut |= SETBIT09;
       break;
 
     case 4:
-      if (state == LOW)
+      if (written_state == LOW)
         *portBOut &= CLEARBIT08;
       else
         *portBOut |= SETBIT08;
       break;
 
     case 5:
-      if (state == LOW)
+      if (written_state == LOW)
         *portBOut &= CLEARBIT11;
       else
         *portBOut |= SETBIT11;
