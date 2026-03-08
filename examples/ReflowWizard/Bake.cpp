@@ -1,7 +1,18 @@
 // Written by Peter Easton
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
-
+#include "Bake.h"
+#include "BakeVars.h"
+#include "Help.h"
+#include "Outputs.h"
+#include "Prefs.h"
+#include "Render.h"
+#include "Screens.h"
+#include "Servo.h"
+#include "Temperature.h"
+#include "Tones.h"
+#include "Touch.h"
+#include "Utility.h"
 
 // Stay in this function until the bake is done or canceled
 void bake() {
@@ -16,7 +27,7 @@ void bake() {
   boolean isHeating = true;
   long lastOverTempTime = 0;
   boolean abortDialogIsOnScreen = false;
-  
+
   // Verify the outputs are configured
   if (areOutputsConfigured() == false) {
     showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
@@ -36,7 +47,7 @@ void bake() {
 
   // Stagger the element start cycle to avoid abrupt changes in current draw
   // Simple method: there are 6 outputs but the first ones are likely the heating elements
-  for (i=0; i< NUMBER_OF_OUTPUTS; i++)
+  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
     elementDutyCounter[i] = (70 * i) % 100;
 
   // Set up the screen in preparation for baking
@@ -48,8 +59,8 @@ userChangedMindAboutAborting:
 
   // Setup the tap targets on this screen
   clearTouchTargets();
-  drawButton(110, 230, 260, 87, BUTTON_LARGE_FONT, (char *) "STOP");
-  defineTouchArea(20, 150, 440, 170); // Large tap target to stop baking
+  drawButton(110, 230, 260, 87, BUTTON_LARGE_FONT, (char *)"STOP");
+  defineTouchArea(20, 150, 440, 170);  // Large tap target to stop baking
 
   // Toggle the baking temperature between C/F if the user taps in the top-right corner
   setTouchTemperatureUnitChangeCallback(displayBakeTemperatureAndDuration);
@@ -68,15 +79,14 @@ userChangedMindAboutAborting:
   while (1) {
     // Has there been a touch?
     switch (getTap(CHECK_FOR_TAP_THEN_EXIT)) {
-      case 0: 
+      case 0:
         // If baking is done (or user taps "stop" in Abort dialog) then clean up and return to the main menu
         if (bakePhase >= BAKING_PHASE_COOLING || abortDialogIsOnScreen) {
           bakePhase = BAKING_PHASE_ABORT;
           // Make sure we exit this screen as soon as possible
           lastLoopTime = millis() - 20;
           counter = 40;
-        }
-        else {
+        } else {
           // User tapped to abort baking
           drawBakingAbortDialog();
           abortDialogIsOnScreen = true;
@@ -100,7 +110,7 @@ userChangedMindAboutAborting:
         // Redraw the screen under the dialog
         goto userChangedMindAboutAborting;
     }
-    
+
     // Execute this loop every 20ms (50 times per second)
     if (millis() - lastLoopTime < 20) {
       delay(1);
@@ -125,34 +135,34 @@ userChangedMindAboutAborting:
       counter = 0;
       isOneSecondInterval = true;
     }
-    
+
     // Read the current temperature
     currentTemperature = getCurrentTemperature();
     if (IS_MAX31856_ERROR(currentTemperature)) {
-      switch ((int) currentTemperature) {
+      switch ((int)currentTemperature) {
         case FAULT_OPEN:
           strcpy(buffer100Bytes, "Fault open (disconnected)");
           break;
         case FAULT_VOLTAGE:
           strcpy(buffer100Bytes, "Over/under voltage (wrong type?)");
           break;
-        case NO_MAX31856: // Should never happen unless MAX31856 is broken
+        case NO_MAX31856:  // Should never happen unless MAX31856 is broken
           strcpy(buffer100Bytes, "MAX31856 error");
           break;
       }
-    
+
       // Abort the bake
       SerialUSB.println("Thermocouple error:" + String(buffer100Bytes));
       SerialUSB.println("Bake aborted because of thermocouple error!");
       // Show the error on the screen
       drawThickRectangle(0, 90, 480, 230, 15, RED);
       tft.fillRect(15, 105, 450, 100, WHITE);
-      displayString(130, 110, FONT_12PT_BLACK_ON_WHITE, (char *) "Baking Error!");
-      displayString(40, 150, FONT_9PT_BLACK_ON_WHITE, (char *) "Thermocouple error:");
+      displayString(130, 110, FONT_12PT_BLACK_ON_WHITE, (char *)"Baking Error!");
+      displayString(40, 150, FONT_9PT_BLACK_ON_WHITE, (char *)"Thermocouple error:");
       displayString(40, 180, FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
       // Turn everything off
       setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_OFF, COOLING_FAN_OFF);
-      animateIcons(iconsX); 
+      animateIcons(iconsX);
       // Wait for the user to tap the screen
       getTap(SHOW_TEMPERATURE_IN_HEADER);
       bakePhase = BAKING_PHASE_ABORT;
@@ -170,12 +180,12 @@ userChangedMindAboutAborting:
           SerialUSB.println("Move to bake phase");
         }
         break;
-       
+
       case BAKING_PHASE_BAKE:
         // Make changes every second
         if (!isOneSecondInterval)
           break;
-          
+
         // Has the bake duration been reached?
         secondsLeftOfBake--;
         if (secondsLeftOfBake == 0) {
@@ -215,7 +225,7 @@ userChangedMindAboutAborting:
         // Increase the bake integral if not close to temperature
         if (prefs.bakeTemperature - currentTemperature > 1.0)
           bakeIntegral++;
-          
+
         // Has the oven been under-temperature for a while?
         if (bakeIntegral > 30) {
           bakeIntegral = 0;
@@ -228,10 +238,10 @@ userChangedMindAboutAborting:
 
       case BAKING_PHASE_START_COOLING:
         isHeating = false;
-      
+
         // Turn off all elements and turn on the fans
         setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_ON, COOLING_FAN_ON);
-     
+
         // Move to the next phase
         bakePhase = BAKING_PHASE_COOLING;
         displayBakePhase(bakePhase, abortDialogIsOnScreen);
@@ -242,8 +252,8 @@ userChangedMindAboutAborting:
 
         // Change the STOP button to DONE
         tft.fillRect(150, 242, 180, 36, WHITE);
-        drawButton(110, 230, 260, 93, BUTTON_LARGE_FONT, (char *) "DONE");
-        
+        drawButton(110, 230, 260, 93, BUTTON_LARGE_FONT, (char *)"DONE");
+
         // Cooling should be at least 60 seconds in duration
         coolingDuration = 60;
         break;
@@ -252,10 +262,10 @@ userChangedMindAboutAborting:
         // Make changes every second
         if (!isOneSecondInterval)
           break;
-          
+
         // Wait in this phase until the oven has cooled
         if (coolingDuration > 0)
-          coolingDuration--;      
+          coolingDuration--;
         if (currentTemperature < 50.0 && coolingDuration == 0) {
           isHeating = false;
           // Turn all elements and fans off
@@ -284,10 +294,10 @@ userChangedMindAboutAborting:
         // Return to the main menu
         return;
     }
- 
+
     // Turn the outputs on or off based on the duty cycle
     if (isHeating) {
-      for (i=0; i< NUMBER_OF_OUTPUTS; i++) {
+      for (i = 0; i < NUMBER_OF_OUTPUTS; i++) {
         switch (prefs.outputType[i]) {
           case TYPE_TOP_ELEMENT:
             // Turn the output on at 0, and off at the duty cycle value
@@ -295,7 +305,7 @@ userChangedMindAboutAborting:
               setOutput(i, HIGH);
             // Restrict the top element's duty cycle to 75% to protect the insulation
             // and reduce IR heating of components
-            if (elementDutyCounter[i] == (bakeDutyCycle < 75? bakeDutyCycle: 75))
+            if (elementDutyCounter[i] == (bakeDutyCycle < 75 ? bakeDutyCycle : 75))
               setOutput(i, LOW);
             break;
           case TYPE_BOTTOM_ELEMENT:
@@ -305,39 +315,36 @@ userChangedMindAboutAborting:
             if (elementDutyCounter[i] == bakeDutyCycle)
               setOutput(i, LOW);
             break;
-          
-          case TYPE_BOOST_ELEMENT: 
+
+          case TYPE_BOOST_ELEMENT:
             // Give it half the duty cycle of the other elements
             // Turn the output on at 0, and off at the duty cycle value
             if (elementDutyCounter[i] == 0)
               setOutput(i, HIGH);
-            if (elementDutyCounter[i] == bakeDutyCycle/2)
+            if (elementDutyCounter[i] == bakeDutyCycle / 2)
               setOutput(i, LOW);
-          break;
+            break;
         }
-      
+
         // Increment the duty counter
         elementDutyCounter[i] = (elementDutyCounter[i] + 1) % 100;
       }
     }
 
-    animateIcons(iconsX);  
-  } // end of big while loop
+    animateIcons(iconsX);
+  }  // end of big while loop
 }
-
 
 // Print baking information to the serial port so it can be plotted
 void DumpDataToUSB(uint16_t duration, float temperature, int duty, int integral) {
   // Write the time and temperature to the serial port, for graphing or analysis on a PC
-  uint16_t fraction = ((uint16_t) (temperature * 100)) % 100;
-  sprintf(buffer100Bytes, "%u, %d.%02d, %i, %i", duration, (uint16_t) temperature, fraction, duty, integral);
+  uint16_t fraction = ((uint16_t)(temperature * 100)) % 100;
+  sprintf(buffer100Bytes, "%u, %d.%02d, %i, %i", duration, (uint16_t)temperature, fraction, duty, integral);
   SerialUSB.println(buffer100Bytes);
 }
 
-
 // Display the baking phase on the screen
-void displayBakePhase(uint8_t phase, boolean abortDialogIsOnScreen)
-{
+void displayBakePhase(uint8_t phase, boolean abortDialogIsOnScreen) {
   static uint16_t lastMsgX = 0, lastLen = 1;
   // Don't display anything if the abort dialog is on the screen
   if (abortDialogIsOnScreen)
@@ -345,46 +352,40 @@ void displayBakePhase(uint8_t phase, boolean abortDialogIsOnScreen)
   // Ease the previous message
   tft.fillRect(lastMsgX, 175, lastLen, 24, WHITE);
   // Display the new message
-  lastLen = displayString(bakePhaseStrPosition[phase], 175, FONT_9PT_BLACK_ON_WHITE, (char *) bakePhaseStr[phase]);
+  lastLen = displayString(bakePhaseStrPosition[phase], 175, FONT_9PT_BLACK_ON_WHITE, (char *)bakePhaseStr[phase]);
   lastMsgX = bakePhaseStrPosition[phase];
   // Dump this out the debugging port too
   SerialUSB.println("Baking phase = " + String(bakePhaseStr[phase]));
 }
 
-
 // Draw the abort dialog on the screen.  The user needs to confirm that they want to exit bake
-void drawBakingAbortDialog()
-{
+void drawBakingAbortDialog() {
   drawThickRectangle(0, 90, 480, 230, 15, RED);
   tft.fillRect(15, 105, 450, 200, WHITE);
-  displayString(140, 110, FONT_12PT_BLACK_ON_WHITE, (char *) "Stop Baking");
-  displayString(62, 150, FONT_9PT_BLACK_ON_WHITE, (char *) "Are you sure you want to stop");
-  displayString(62, 180, FONT_9PT_BLACK_ON_WHITE, (char *) "baking?");
+  displayString(140, 110, FONT_12PT_BLACK_ON_WHITE, (char *)"Stop Baking");
+  displayString(62, 150, FONT_9PT_BLACK_ON_WHITE, (char *)"Are you sure you want to stop");
+  displayString(62, 180, FONT_9PT_BLACK_ON_WHITE, (char *)"baking?");
   clearTouchTargets();
-  drawTouchButton(60, 230, 160, 72, BUTTON_LARGE_FONT, (char *) "Stop");
-  drawTouchButton(260, 230, 160, 105, BUTTON_LARGE_FONT, (char *) "Cancel");
+  drawTouchButton(60, 230, 160, 72, BUTTON_LARGE_FONT, (char *)"Stop");
+  drawTouchButton(260, 230, 160, 105, BUTTON_LARGE_FONT, (char *)"Cancel");
 }
-
 
 // Display the bake temperature and duration on the screen
 // This is also a callback routine, called if the user taps in the top-right corner
-void displayBakeTemperatureAndDuration(boolean displayCelsius)
-{
+void displayBakeTemperatureAndDuration(boolean displayCelsius) {
   // Get the bake duration
-  secondsToEnglishString((buffer100Bytes)+50, getBakeSeconds(prefs.bakeDuration));
+  secondsToEnglishString((buffer100Bytes) + 50, getBakeSeconds(prefs.bakeDuration));
   // Create a string of the description
-  sprintf(buffer100Bytes, "Bake at %d~%c for %s.", displayCelsius? prefs.bakeTemperature: (prefs.bakeTemperature*9/5)+32,
-                  displayCelsius? 'C':'F', (buffer100Bytes)+50);
+  sprintf(buffer100Bytes, "Bake at %d~%c for %s.", displayCelsius ? prefs.bakeTemperature : (prefs.bakeTemperature * 9 / 5) + 32,
+          displayCelsius ? 'C' : 'F', (buffer100Bytes) + 50);
   // Erase the previous description
   tft.fillRect(20, 60, 460, 19, WHITE);
   // Display the new description
   displayString(20, 60, FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
 }
 
-
 // Display the countdown timer
-void displayBakeSecondsLeft(uint32_t seconds)
-{
+void displayBakeSecondsLeft(uint32_t seconds) {
   static uint16_t oldWidth = 1, timerX = 130;
 
   // Update the clock display
@@ -392,7 +393,7 @@ void displayBakeSecondsLeft(uint32_t seconds)
   // Keep the timer display centered
   if (newWidth != oldWidth) {
     // The width has changed (one less character on the display).  Erase what was there
-    tft.fillRect(timerX, 110, newWidth > oldWidth? newWidth : oldWidth, 48, WHITE);
+    tft.fillRect(timerX, 110, newWidth > oldWidth ? newWidth : oldWidth, 48, WHITE);
     // Redraw the timer
     oldWidth = newWidth;
     timerX = 240 - (newWidth >> 1);
@@ -400,16 +401,14 @@ void displayBakeSecondsLeft(uint32_t seconds)
   }
 }
 
-
 // Returns the bake duration, in seconds
-uint32_t getBakeSeconds(uint16_t duration)
-{
+uint32_t getBakeSeconds(uint16_t duration) {
   uint32_t minutes;
 
   // Sanity check on the parameter
   if (duration > BAKE_MAX_DURATION)
     return 5;
-  
+
   // 5 to 30 minutes, at 1 minute increments
   if (duration <= 25)
     minutes = duration + 5;
@@ -437,8 +436,7 @@ uint32_t getBakeSeconds(uint16_t duration)
   // 96+ hours in 12 hour increments
   else
     minutes = (duration - 121) * 720 + 5760;
-//  SerialUSB.println("Duration=" + String(duration) + "  minutes=" + String(minutes));
+  //  SerialUSB.println("Duration=" + String(duration) + "  minutes=" + String(minutes));
 
   return minutes * 60;
 }
-

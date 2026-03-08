@@ -1,22 +1,38 @@
 // Written by Peter Easton
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
+#include "Reflow.h"
+#include "Bake.h"
+#include "Help.h"
+#include "Outputs.h"
+#include "Prefs.h"
+#include "ReadProfiles.h"
+#include "Render.h"
+#include "Screens.h"
+#include "Servo.h"
+#include "Temperature.h"
+#include "Tones.h"
+#include "Touch.h"
+#include "Utility.h"
 
-#define BUTTON_DONE      0
-#define BUTTON_STOP      1
+#define BUTTON_DONE 0
+#define BUTTON_STOP 1
 
 // Graph location and size
-#define GRAPH_TOP      145
-#define GRAPH_LEFT      45
-#define GRAPH_HEIGHT   150 
-#define GRAPH_WIDTH    300
+#define GRAPH_TOP 145
+#define GRAPH_LEFT 45
+#define GRAPH_HEIGHT 150
+#define GRAPH_WIDTH 300
 
-#define CLOSE_LOG_FILE   if (logFileOpen) { logFile.close();  logFileOpen = false; }
+#define CLOSE_LOG_FILE \
+  if (logFileOpen) { \
+    logFile.close(); \
+    logFileOpen = false; \
+  }
 
 // Perform a reflow
 // Stay in this function until the reflow is done or canceled
-void reflow(uint8_t profileNo)
-{
+void reflow(uint8_t profileNo) {
   uint32_t reflowTimer = 0, countdownTimer = 0, plotSeconds = 0, secondsFromStart = 0, lastLoopTime = millis();
   uint8_t counter = 0;
   uint8_t reflowPhase = REFLOW_PHASE_NEXT_COMMAND;
@@ -31,7 +47,7 @@ void reflow(uint8_t profileNo)
   float pidPreviousError = 0, pidIntegral = 0, pidDerivative, thisError;
   uint16_t graphMaxTemp = 0, graphMaxSeconds = 0;
   File logFile;
-  
+
   // Verify the outputs are configured
   if (areOutputsConfigured() == false) {
     showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
@@ -87,7 +103,7 @@ void reflow(uint8_t profileNo)
 
   // Stagger the element start cycle to avoid abrupt changes in current draw
   // Simple method: there are 6 outputs but the first ones are likely the heating elements
-  for (i=0; i< NUMBER_OF_OUTPUTS; i++)
+  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
     elementDutyCounter[i] = (65 * i) % 100;
 
   // Default the maximum duty cycles for the elements.  These values can be overwritten by the profile file
@@ -114,13 +130,13 @@ void reflow(uint8_t profileNo)
 
   // Default the title to the old "Reflow" (the title can be overwritten in the profile)
   eraseHeader();
-  displayHeader((char *) "Reflow", false);
+  displayHeader((char *)"Reflow", false);
 
   // Ug, hate goto's!  But this saves a lot of extraneous code.
 userChangedMindAboutAborting:
 
   // Erase the bottom part of the screen
-   tft.fillRect(0, 100, 480, 230, WHITE);
+  tft.fillRect(0, 100, 480, 230, WHITE);
 
   // Setup the STOP/DONE tap targets on this screen
   drawStopDoneButton(displayGraph, BUTTON_STOP);
@@ -134,7 +150,7 @@ userChangedMindAboutAborting:
 
   // Display the status (if waiting)
   updateStatusMessage(token, countdownTimer, desiredTemperature, abortDialogIsOnScreen);
-  
+
   // Debounce any taps that took us to this screen
   debounce();
 
@@ -147,18 +163,17 @@ userChangedMindAboutAborting:
       quickDebounce();
       reflowPhase = REFLOW_PHASE_NEXT_COMMAND;
     }
-    
+
     // Has there been a touch?
     switch (getTap(CHECK_FOR_TAP_THEN_EXIT)) {
-      case 0: 
+      case 0:
         // If reflow is done (or user taps "stop" in Abort dialog) then clean up and return to the main menu
         if (reflowPhase >= REFLOW_ALL_DONE || abortDialogIsOnScreen) {
           reflowPhase = REFLOW_ABORT;
           // Make sure we exit this screen as soon as possible
           lastLoopTime = millis() - 20;
           counter = 40;
-        }
-        else {
+        } else {
           // User tapped to abort the reflow
           drawReflowAbortDialog();
           abortDialogIsOnScreen = true;
@@ -181,7 +196,7 @@ userChangedMindAboutAborting:
         // Redraw the screen under the dialog
         goto userChangedMindAboutAborting;
     }
-    
+
     // Execute this loop every 20ms (50 times per second)
     if (millis() - lastLoopTime < 20) {
       delay(1);
@@ -201,7 +216,7 @@ userChangedMindAboutAborting:
       displayReflowDuration(reflowTimer, displayGraph);
     // Log data to the SD card
     if (counter == 20 && logFileOpen) {
-      sprintf(buffer100Bytes, "%ld,%d.%02d", secondsFromStart, (uint16_t) currentTemperature, (uint16_t) ((currentTemperature - (uint16_t) currentTemperature) * 100));
+      sprintf(buffer100Bytes, "%ld,%d.%02d", secondsFromStart, (uint16_t)currentTemperature, (uint16_t)((currentTemperature - (uint16_t)currentTemperature) * 100));
       logFile.println(buffer100Bytes);
       // Flush the buffer (write to SD card) frequenty to prevent stutters when writing big blocks of data
       logFile.flush();
@@ -219,26 +234,26 @@ userChangedMindAboutAborting:
       plotSeconds++;
       secondsFromStart++;
     }
-    
+
     // Read the current temperature
     currentTemperature = getCurrentTemperature();
     if (IS_MAX31856_ERROR(currentTemperature)) {
-      switch ((int) currentTemperature) {
+      switch ((int)currentTemperature) {
         case FAULT_OPEN:
           strcpy(buffer100Bytes, "Fault open (disconnected)");
           break;
         case FAULT_VOLTAGE:
           strcpy(buffer100Bytes, "Over/under voltage (wrong type?)");
           break;
-        case NO_MAX31856: // Should never happen unless MAX31856 is broken
+        case NO_MAX31856:  // Should never happen unless MAX31856 is broken
           strcpy(buffer100Bytes, "MAX31856 error");
           break;
       }
-    
+
       // Abort the reflow
       SerialUSB.println("Thermocouple error:" + String(buffer100Bytes));
       SerialUSB.println("Profile aborted because of thermocouple error!");
-      showReflowError(iconsX, (char *) "Thermocouple error:", buffer100Bytes);
+      showReflowError(iconsX, (char *)"Thermocouple error:", buffer100Bytes);
       reflowPhase = REFLOW_ABORT;
     }
 
@@ -250,8 +265,8 @@ userChangedMindAboutAborting:
       // Abort the reflow
       SerialUSB.println("Profile aborted because of maximum temperature exceeded!");
       sprintf(buffer100Bytes, "Maximum temperature of %d~C", maxTemperature);
-      showReflowError(iconsX, buffer100Bytes, (char *) "was exceeded.");
-      reflowPhase = REFLOW_ABORT;      
+      showReflowError(iconsX, buffer100Bytes, (char *)"was exceeded.");
+      reflowPhase = REFLOW_ABORT;
     }
 
     switch (reflowPhase) {
@@ -277,16 +292,16 @@ userChangedMindAboutAborting:
 
           case TOKEN_MAX_DUTY:
             // Overwrite the default max duty cycles of the elements (max is 100%)
-            maxDuty[TYPE_BOTTOM_ELEMENT] = numbers[0] < 100? numbers[0]: 100;
-            maxDuty[TYPE_TOP_ELEMENT] = numbers[1] < 100? numbers[1]: 100;
-            maxDuty[TYPE_BOOST_ELEMENT] = numbers[2] < 100? numbers[2]: 100;
+            maxDuty[TYPE_BOTTOM_ELEMENT] = numbers[0] < 100 ? numbers[0] : 100;
+            maxDuty[TYPE_TOP_ELEMENT] = numbers[1] < 100 ? numbers[1] : 100;
+            maxDuty[TYPE_BOOST_ELEMENT] = numbers[2] < 100 ? numbers[2] : 100;
             break;
 
           case TOKEN_ELEMENT_DUTY_CYCLES:
             // Force a specific duty cycle on the elements.  This turns off PID
-            currentDuty[TYPE_BOTTOM_ELEMENT] = numbers[0] < 100? numbers[0]: 100;
-            currentDuty[TYPE_TOP_ELEMENT] = numbers[1] < 100? numbers[1]: 100;
-            currentDuty[TYPE_BOOST_ELEMENT] = numbers[2] < 100? numbers[2]: 100;
+            currentDuty[TYPE_BOTTOM_ELEMENT] = numbers[0] < 100 ? numbers[0] : 100;
+            currentDuty[TYPE_TOP_ELEMENT] = numbers[1] < 100 ? numbers[1] : 100;
+            currentDuty[TYPE_BOOST_ELEMENT] = numbers[2] < 100 ? numbers[2] : 100;
             // Make sure the maximum duty cycles hasn't been exceeded
             for (i = TYPE_BOTTOM_ELEMENT; i <= TYPE_BOOST_ELEMENT; i++) {
               if (currentDuty[i] > maxDuty[i])
@@ -332,27 +347,27 @@ userChangedMindAboutAborting:
           case TOKEN_START_TIMER:
             incrementTimer = true;
             break;
-            
+
           case TOKEN_STOP_TIMER:
             incrementTimer = false;
             break;
-          
+
           case TOKEN_OVEN_DOOR_OPEN:
             // Open the oven door over X seconds
-            numbers[0] = numbers[0] < 30? numbers[0]: 30;
+            numbers[0] = numbers[0] < 30 ? numbers[0] : 30;
             setServoPosition(prefs.servoOpenDegrees, numbers[0] * 1000);
             break;
-            
+
           case TOKEN_OVEN_DOOR_CLOSE:
             // Close the oven door over X seconds
-            numbers[0] = numbers[0] < 30? numbers[0]: 30;
+            numbers[0] = numbers[0] < 30 ? numbers[0] : 30;
             setServoPosition(prefs.servoClosedDegrees, numbers[0] * 1000);
             break;
 
           case TOKEN_OVEN_DOOR_PERCENT:
             // Open the oven door a certain percentage
-            numbers[0] = numbers[0] < 100? numbers[0]: 100;
-            numbers[1] = numbers[1] < 30? numbers[1]: 30;
+            numbers[0] = numbers[0] < 100 ? numbers[0] : 100;
+            numbers[1] = numbers[1] < 30 ? numbers[1] : 30;
             setServoPosition(map(numbers[0], 0, 100, prefs.servoClosedDegrees, prefs.servoOpenDegrees), numbers[1] * 1000);
             break;
 
@@ -389,10 +404,10 @@ userChangedMindAboutAborting:
               SerialUSB.println("ERROR: wait-until-temp higher than maximum temperature!");
               desiredTemperature = maxTemperature;
             }
-            reflowPhase = REFLOW_WAITING_UNTIL_ABOVE;            
+            reflowPhase = REFLOW_WAITING_UNTIL_ABOVE;
             updateStatusMessage(token, 0, desiredTemperature, abortDialogIsOnScreen);
             break;
-            
+
           case TOKEN_WAIT_UNTIL_BELOW_C:
             // PID shouldn't be on now. TOKEN_ELEMENT_DUTY_CYCLES should've been specified
             if (isPID) {
@@ -410,14 +425,14 @@ userChangedMindAboutAborting:
               SerialUSB.println("ERROR: wait-until-temp lower than room temperature!");
               desiredTemperature = 25;
             }
-            reflowPhase = REFLOW_WAITING_UNTIL_BELOW;            
+            reflowPhase = REFLOW_WAITING_UNTIL_BELOW;
             updateStatusMessage(token, 0, desiredTemperature, abortDialogIsOnScreen);
             break;
 
           case TOKEN_MAINTAIN_TEMP:
             // Save the parameters
             pidTemperature = numbers[0];
-            countdownTimer = numbers[1] > 0? numbers[1] : 1;
+            countdownTimer = numbers[1] > 0 ? numbers[1] : 1;
             updateStatusMessage(token, countdownTimer, pidTemperature, abortDialogIsOnScreen);
             desiredTemperature = pidTemperature;
 
@@ -433,8 +448,8 @@ userChangedMindAboutAborting:
           case TOKEN_SHOW_GRAPH:
             // Graph the reflow
             displayGraph = true;
-            graphMaxTemp = numbers[0] > 100? numbers[0] : 100;
-            graphMaxSeconds = numbers[1] > 100? numbers[1] : 100;
+            graphMaxTemp = numbers[0] > 100 ? numbers[0] : 100;
+            graphMaxSeconds = numbers[1] > 100 ? numbers[1] : 100;
             // Don't start plotting until the "start plotting" command
             plotSeconds = graphMaxSeconds + 1;
             // Draw the graph UI
@@ -444,10 +459,10 @@ userChangedMindAboutAborting:
           case TOKEN_GRAPH_DIVIDER:
             if (displayGraph) {
               // Calculate where the line must be
-              uint16_t ypos = GRAPH_TOP + GRAPH_HEIGHT - (GRAPH_HEIGHT * ((float) numbers[0]/(float) graphMaxTemp));
+              uint16_t ypos = GRAPH_TOP + GRAPH_HEIGHT - (GRAPH_HEIGHT * ((float)numbers[0] / (float)graphMaxTemp));
               ypos = constrain(ypos, GRAPH_TOP, GRAPH_TOP + GRAPH_HEIGHT);
               // Draw the line
-              tft.drawFastHLine(GRAPH_LEFT+2, ypos, GRAPH_WIDTH-2, GREEN);
+              tft.drawFastHLine(GRAPH_LEFT + 2, ypos, GRAPH_WIDTH - 2, GREEN);
             }
             break;
 
@@ -456,22 +471,22 @@ userChangedMindAboutAborting:
             plotSeconds = numbers[0];
             SerialUSB.println("Starting to plot");
             break;
-            
+
           case TOKEN_CONVECTION_FAN_ON:
             // Turn on the convection fan
             turnConvectionFanOn(true);
             break;
-            
+
           case TOKEN_CONVECTION_FAN_OFF:
             // Turn off the convection fan
             turnConvectionFanOn(false);
             break;
-            
+
           case TOKEN_COOLING_FAN_ON:
             // Turn on the cooling fan
             turnCoolingFanOn(true);
             break;
-            
+
           case TOKEN_COOLING_FAN_OFF:
             // Turn off the cooling fan
             turnCoolingFanOn(false);
@@ -481,16 +496,16 @@ userChangedMindAboutAborting:
             // Play a tune to let the user know reflow is done
             playTones(TUNE_REFLOW_DONE);
             break;
- 
+
           case TOKEN_PLAY_BEEP:
             // Play a tune to let the user know reflow is done
             playTones(TUNE_REFLOW_BEEP);
             break;
- 
+
           case TOKEN_TEMPERATURE_TARGET:
             // Save the parameters
             desiredTemperature = numbers[0];
-            countdownTimer = numbers[1] > 0? numbers[1] : 1;
+            countdownTimer = numbers[1] > 0 ? numbers[1] : 1;
             updateStatusMessage(token, countdownTimer, desiredTemperature, abortDialogIsOnScreen);
             // The temperature control is now done using PID
             isPID = true;
@@ -524,7 +539,7 @@ userChangedMindAboutAborting:
         if (!reflowTimer)
           lastLoopTime = millis() - 20;
         break;
-        
+
       case REFLOW_WAITING_FOR_TIME:
         // Make changes every second
         if (!isOneSecondInterval)
@@ -541,7 +556,7 @@ userChangedMindAboutAborting:
           reflowPhase = REFLOW_PHASE_NEXT_COMMAND;
         }
         break;
-        
+
       case REFLOW_WAITING_UNTIL_ABOVE:
         // Make changes every second
         if (!isOneSecondInterval)
@@ -617,18 +632,18 @@ userChangedMindAboutAborting:
           reflowPhase = REFLOW_PHASE_NEXT_COMMAND;
           break;
         }
-        
+
         // Calculate what the expected temperature should be at this point
         pidTemperature += pidTemperatureDelta;
-      
+
         // Abort if deviated too far from the required temperature
         if (reflowPhase == REFLOW_PID && abs(pidTemperature - currentTemperature) > maxTemperatureDeviation && pidTemperature < desiredTemperature) {
           // Open the oven door
           setServoPosition(prefs.servoOpenDegrees, 3000);
           SerialUSB.println("ERROR: temperature delta exceeds maximum allowed!");
           sprintf(buffer100Bytes, "Exceeded max deviation of %d~C.", maxTemperatureDeviation);
-          sprintf(buffer100Bytes+50, "Target = %d~C, actual = %d~C", (int) pidTemperature, (int) currentTemperature);
-          showReflowError(iconsX, buffer100Bytes, buffer100Bytes+50);
+          sprintf(buffer100Bytes + 50, "Target = %d~C, actual = %d~C", (int)pidTemperature, (int)currentTemperature);
+          showReflowError(iconsX, buffer100Bytes, buffer100Bytes + 50);
           reflowPhase = REFLOW_ALL_DONE;
           break;
         }
@@ -636,14 +651,14 @@ userChangedMindAboutAborting:
         // Assume a certain power level, based on the current temperature and the rate-of-rise
         // This should be fairly accurate, and is based on the learned values
         pidPower = getBasePIDPower(pidTemperature, pidTemperatureDelta, bias, maxBias);
-        
+
         // Do the PID calculation now.  The base power will be adjusted a bit based on this result
         // This is the standard PID formula, using a 1-second interval
         thisError = pidTemperature - currentTemperature;
         pidIntegral = pidIntegral + thisError;
         pidDerivative = thisError - pidPreviousError;
         pidPreviousError = thisError;
-        
+
         // The black magic of PID tuning!
         // Compared to most other closed-loop systems, reflow ovens are slow to respond to input, so the derivative term is the
         // most important one.  The other terms are assigned lower weights.
@@ -655,7 +670,7 @@ userChangedMindAboutAborting:
         //   elements take a very long time to heat up and cool down so this will be a much higher value.
         Kd = map(constrain(prefs.learnedInertia, 30, 100), 30, 100, 30, 75);
         // Dump these values out over USB for debugging
-        SerialUSB.println("T="+String(currentTemperature)+" P="+String(pidTemperature)+" D="+String(pidTemperatureDelta)+" E="+String(thisError)+" I="+String(pidIntegral)+" D="+String(pidDerivative)+" Kd="+String(Kd));
+        SerialUSB.println("T=" + String(currentTemperature) + " P=" + String(pidTemperature) + " D=" + String(pidTemperatureDelta) + " E=" + String(thisError) + " I=" + String(pidIntegral) + " D=" + String(pidDerivative) + " Kd=" + String(Kd));
 
         // If we're over-temperature, it is best to slow things down even more since taking a bit longer in a phase is better than taking less time
         if (thisError < 0)
@@ -667,7 +682,7 @@ userChangedMindAboutAborting:
         // this up or down a bit.  The effect PID has on the outcome is deliberately limited because moving between zero
         // (elements off) and 100 (full power) will create hot and cold spots.  PID can move the power by 60%; 30% down or up.
         thisError = constrain(thisError, -30, 30);
-        
+
         // Add the base power and the PID delta
         SerialUSB.println("Power was " + String(pidPower) + " and is now " + String(pidPower + thisError));
         pidPower += (thisError);
@@ -694,7 +709,7 @@ userChangedMindAboutAborting:
         // Nothing to do here.  Just waiting for user to tap the screen
         CLOSE_LOG_FILE;
         break;
-        
+
       case REFLOW_ABORT:
         // User either tapped "Done" at the end of the reflow, or the user tapped abort
         setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_OFF, COOLING_FAN_OFF);
@@ -705,14 +720,14 @@ userChangedMindAboutAborting:
         // All done!
         return;
     }
- 
+
     // Turn the outputs on or off based on the duty cycle
-    for (i=0; i< NUMBER_OF_OUTPUTS; i++) {
+    for (i = 0; i < NUMBER_OF_OUTPUTS; i++) {
       switch (prefs.outputType[i]) {
         case TYPE_TOP_ELEMENT:
           // Turn the output on at 0, and off at the duty cycle value
           if (elementDutyCounter[i] == 0 && currentDuty[TYPE_TOP_ELEMENT] > 0)
-              setOutput(i, HIGH);
+            setOutput(i, HIGH);
           // Turn it off at the right duty cycle
           if (elementDutyCounter[i] >= currentDuty[TYPE_TOP_ELEMENT])
             setOutput(i, LOW);
@@ -720,81 +735,75 @@ userChangedMindAboutAborting:
         case TYPE_BOTTOM_ELEMENT:
           // Turn the output on at 0, and off at the duty cycle value
           if (elementDutyCounter[i] == 0 && currentDuty[TYPE_BOTTOM_ELEMENT] > 0)
-              setOutput(i, HIGH);
+            setOutput(i, HIGH);
           // Turn it off at the right duty cycle
           if (elementDutyCounter[i] >= currentDuty[TYPE_BOTTOM_ELEMENT])
             setOutput(i, LOW);
           break;
-          
-        case TYPE_BOOST_ELEMENT: 
+
+        case TYPE_BOOST_ELEMENT:
           // Turn the output on at 0, and off at the duty cycle value
           if (elementDutyCounter[i] == 0 && currentDuty[TYPE_BOOST_ELEMENT] > 0)
-              setOutput(i, HIGH);
+            setOutput(i, HIGH);
           // Turn it off at the right duty cycle
           if (elementDutyCounter[i] >= currentDuty[TYPE_BOOST_ELEMENT])
             setOutput(i, LOW);
           break;
-        }
-      
-        // Increment the duty counter
-        elementDutyCounter[i] = (elementDutyCounter[i] + 1) % 100;
+      }
+
+      // Increment the duty counter
+      elementDutyCounter[i] = (elementDutyCounter[i] + 1) % 100;
     }
 
     // Add data to the graph plot
-     if (isOneSecondInterval  && !abortDialogIsOnScreen && displayGraph) {
-       // Does this data point need to be plotted?
-       if (plotSeconds > 0 && plotSeconds < graphMaxSeconds) {
-         // Calculate the x and y positions of this point
-         uint16_t xpos = GRAPH_LEFT + (((float) plotSeconds)/((float) graphMaxSeconds)) * GRAPH_WIDTH;
-         uint16_t ypos = GRAPH_TOP + GRAPH_HEIGHT - (GRAPH_HEIGHT * ((float) currentTemperature/(float) graphMaxTemp));
-         // Allow the temperature to go over the top of the graph, just a bit
-         ypos = constrain(ypos, GRAPH_TOP - 6, GRAPH_TOP + GRAPH_HEIGHT - 1);
-         xpos = constrain(xpos, GRAPH_LEFT + 1, GRAPH_LEFT + GRAPH_WIDTH - 1);
-         tft.fillRect(xpos - 1, ypos - 1, 3, 3, RED);
-       }
-     }
+    if (isOneSecondInterval && !abortDialogIsOnScreen && displayGraph) {
+      // Does this data point need to be plotted?
+      if (plotSeconds > 0 && plotSeconds < graphMaxSeconds) {
+        // Calculate the x and y positions of this point
+        uint16_t xpos = GRAPH_LEFT + (((float)plotSeconds) / ((float)graphMaxSeconds)) * GRAPH_WIDTH;
+        uint16_t ypos = GRAPH_TOP + GRAPH_HEIGHT - (GRAPH_HEIGHT * ((float)currentTemperature / (float)graphMaxTemp));
+        // Allow the temperature to go over the top of the graph, just a bit
+        ypos = constrain(ypos, GRAPH_TOP - 6, GRAPH_TOP + GRAPH_HEIGHT - 1);
+        xpos = constrain(xpos, GRAPH_LEFT + 1, GRAPH_LEFT + GRAPH_WIDTH - 1);
+        tft.fillRect(xpos - 1, ypos - 1, 3, 3, RED);
+      }
+    }
 
-     animateIcons(iconsX);
-  } // end of big while loop  
+    animateIcons(iconsX);
+  }  // end of big while loop
 }
 
-
 // Draw the STOP/DONE button on the screen
-void drawStopDoneButton(boolean isGraphDisplayed, boolean buttonIsStop)
-{
+void drawStopDoneButton(boolean isGraphDisplayed, boolean buttonIsStop) {
   clearTouchTargets();
 
   if (isGraphDisplayed) {
-      // Draw the button
-      tft.fillRect(368, 247, 94, 26, WHITE);
-      drawButton(352, 230, 126, buttonIsStop? 87: 93, BUTTON_LARGE_FONT, buttonIsStop? (char *) "STOP" : (char *) "DONE");
-      // Define the tap target (as large as possible)
-      defineTouchArea(320, 200, 160, 120);
-  }
-  else {
-      // Draw the button
-      tft.fillRect(194, 247, 94, 26, WHITE);
-      drawButton(110, 230, 260, buttonIsStop? 87: 93, BUTTON_LARGE_FONT, buttonIsStop? (char *) "STOP" : (char *) "DONE");
-      // Define the tap target (as large as possible)
-      defineTouchArea(20, 150, 440, 170);
+    // Draw the button
+    tft.fillRect(368, 247, 94, 26, WHITE);
+    drawButton(352, 230, 126, buttonIsStop ? 87 : 93, BUTTON_LARGE_FONT, buttonIsStop ? (char *)"STOP" : (char *)"DONE");
+    // Define the tap target (as large as possible)
+    defineTouchArea(320, 200, 160, 120);
+  } else {
+    // Draw the button
+    tft.fillRect(194, 247, 94, 26, WHITE);
+    drawButton(110, 230, 260, buttonIsStop ? 87 : 93, BUTTON_LARGE_FONT, buttonIsStop ? (char *)"STOP" : (char *)"DONE");
+    // Define the tap target (as large as possible)
+    defineTouchArea(20, 150, 440, 170);
   }
 }
 
 // Draw the abort dialog on the screen.  The user needs to confirm that they want to exit reflow
-void drawReflowAbortDialog()
-{
+void drawReflowAbortDialog() {
   drawThickRectangle(0, 100, 480, 220, 10, RED);
   tft.fillRect(10, 110, 460, 200, WHITE);
-  displayString(126, 116, FONT_12PT_BLACK_ON_WHITE, (char *) "Stop Running");
-  displayString(54, 157, FONT_9PT_BLACK_ON_WHITE, (char *) "Are you sure you want to stop?");
+  displayString(126, 116, FONT_12PT_BLACK_ON_WHITE, (char *)"Stop Running");
+  displayString(54, 157, FONT_9PT_BLACK_ON_WHITE, (char *)"Are you sure you want to stop?");
   clearTouchTargets();
-  drawTouchButton(60, 232, 160, 74, BUTTON_LARGE_FONT, (char *) "Stop");
-  drawTouchButton(260, 232, 160, 105, BUTTON_LARGE_FONT, (char *) "Cancel");
+  drawTouchButton(60, 232, 160, 74, BUTTON_LARGE_FONT, (char *)"Stop");
+  drawTouchButton(260, 232, 160, 105, BUTTON_LARGE_FONT, (char *)"Cancel");
 }
 
-
-void updateStatusMessage(uint16_t token, uint16_t timer, uint16_t temperature, boolean abortDialogIsOnScreen)
-{
+void updateStatusMessage(uint16_t token, uint16_t timer, uint16_t temperature, boolean abortDialogIsOnScreen) {
   uint16_t strLength;
   static uint8_t numberLength = 0;
 
@@ -810,18 +819,18 @@ void updateStatusMessage(uint16_t token, uint16_t timer, uint16_t temperature, b
 
   switch (token) {
     case TOKEN_WAIT_FOR_SECONDS:
-      strLength = displayString(20, LINE(2), FONT_9PT_BLACK_ON_WHITE, (char *) "Waiting... ");
+      strLength = displayString(20, LINE(2), FONT_9PT_BLACK_ON_WHITE, (char *)"Waiting... ");
       sprintf(buffer100Bytes, "%d", timer);
       if (numberLength == 0)
         numberLength = strlen(buffer100Bytes);
-      displayFixedWidthString(20+strLength, LINE(2), buffer100Bytes, numberLength, FONT_9PT_BLACK_ON_WHITE_FIXED);
+      displayFixedWidthString(20 + strLength, LINE(2), buffer100Bytes, numberLength, FONT_9PT_BLACK_ON_WHITE_FIXED);
       break;
 
     case TOKEN_WAIT_UNTIL_ABOVE_C:
       sprintf(buffer100Bytes, "Continue when oven is above %d~C", temperature);
       displayString(20, LINE(2), FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
       break;
-      
+
     case TOKEN_WAIT_UNTIL_BELOW_C:
       sprintf(buffer100Bytes, "Continue when oven is below %d~C", temperature);
       displayString(20, LINE(2), FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
@@ -833,7 +842,7 @@ void updateStatusMessage(uint16_t token, uint16_t timer, uint16_t temperature, b
       sprintf(buffer100Bytes, "%d", timer);
       if (numberLength == 0)
         numberLength = strlen(buffer100Bytes);
-      displayFixedWidthString(20+strLength, LINE(2), buffer100Bytes, numberLength, FONT_9PT_BLACK_ON_WHITE_FIXED);
+      displayFixedWidthString(20 + strLength, LINE(2), buffer100Bytes, numberLength, FONT_9PT_BLACK_ON_WHITE_FIXED);
       break;
 
     case TOKEN_MAINTAIN_TEMP:
@@ -842,24 +851,23 @@ void updateStatusMessage(uint16_t token, uint16_t timer, uint16_t temperature, b
       sprintf(buffer100Bytes, "%d", timer);
       if (numberLength == 0)
         numberLength = strlen(buffer100Bytes);
-      displayFixedWidthString(20+strLength, LINE(2), buffer100Bytes, numberLength, FONT_9PT_BLACK_ON_WHITE_FIXED);
+      displayFixedWidthString(20 + strLength, LINE(2), buffer100Bytes, numberLength, FONT_9PT_BLACK_ON_WHITE_FIXED);
       break;
 
     case TOKEN_TAP_SCREEN:
-      displayString(20, LINE(2), FONT_9PT_BLACK_ON_WHITE, (char *) "Tap the screen to continue ...");
+      displayString(20, LINE(2), FONT_9PT_BLACK_ON_WHITE, (char *)"Tap the screen to continue ...");
       break;
   }
 }
 
-
 // Show an error dialog when an error forces reflow to be aborted
-void showReflowError(uint16_t iconsX, char *line1, char *line2)
-{
-  uint32_t lastLoopTime = millis(), updateTemperatureInHeader = millis();;
+void showReflowError(uint16_t iconsX, char *line1, char *line2) {
+  uint32_t lastLoopTime = millis(), updateTemperatureInHeader = millis();
+  ;
   // Show the error on the screen
   drawThickRectangle(0, 90, 480, 230, 15, RED);
   tft.fillRect(15, 105, 450, 200, WHITE);
-  displayString(196, 110, FONT_12PT_BLACK_ON_WHITE, (char *) "Error");
+  displayString(196, 110, FONT_12PT_BLACK_ON_WHITE, (char *)"Error");
   displayString(40, 150, FONT_9PT_BLACK_ON_WHITE, line1);
   displayString(40, 180, FONT_9PT_BLACK_ON_WHITE, line2);
   drawStopDoneButton(false, BUTTON_DONE);
@@ -870,21 +878,19 @@ void showReflowError(uint16_t iconsX, char *line1, char *line2)
   do {
     // Animate the fan icons
     if (millis() - lastLoopTime >= 20) {
-      animateIcons(iconsX); 
+      animateIcons(iconsX);
       lastLoopTime += 20;
     }
     // Update the temperature in the header
     if (millis() - updateTemperatureInHeader >= 1000) {
-      displayTemperatureInHeader(); 
+      displayTemperatureInHeader();
       updateTemperatureInHeader += 1000;
     }
   } while (getTap(CHECK_FOR_TAP_THEN_EXIT) == -1);
 }
 
-
 // Display the reflow timer
-void displayReflowDuration(uint32_t seconds, boolean isGraphDisplayed)
-{
+void displayReflowDuration(uint32_t seconds, boolean isGraphDisplayed) {
   static uint16_t oldWidth = 1, timerX = 381;
   uint16_t newWidth;
 
@@ -893,7 +899,7 @@ void displayReflowDuration(uint32_t seconds, boolean isGraphDisplayed)
     // Keep the timer display centered
     if (newWidth != oldWidth) {
       // The width has changed (one more character on the display).  Erase what was there
-      tft.fillRect(timerX, 170, newWidth > oldWidth? newWidth : oldWidth, 25, WHITE);
+      tft.fillRect(timerX, 170, newWidth > oldWidth ? newWidth : oldWidth, 25, WHITE);
       // Redraw the timer
       oldWidth = newWidth;
       timerX = 415 - (newWidth >> 1);
@@ -902,8 +908,7 @@ void displayReflowDuration(uint32_t seconds, boolean isGraphDisplayed)
         timerX = 475 - newWidth;
       displayString(timerX, 170, FONT_12PT_BLACK_ON_WHITE_FIXED, buffer100Bytes);
     }
-  }
-  else {
+  } else {
     // Center the timer for the "no graph" initialization case
     if (timerX == 381)
       timerX = 178;
@@ -911,7 +916,7 @@ void displayReflowDuration(uint32_t seconds, boolean isGraphDisplayed)
     // Keep the timer display centered
     if (newWidth != oldWidth) {
       // The width has changed (one more character on the display).  Erase what was there
-      tft.fillRect(timerX, 160, newWidth > oldWidth? newWidth : oldWidth, 48, WHITE);
+      tft.fillRect(timerX, 160, newWidth > oldWidth ? newWidth : oldWidth, 48, WHITE);
       // Redraw the timer
       oldWidth = newWidth;
       timerX = 240 - (newWidth >> 1);
@@ -920,13 +925,11 @@ void displayReflowDuration(uint32_t seconds, boolean isGraphDisplayed)
   }
 }
 
-
 // Calculate the expected power level based on the desired temperature and desired rate-of-rise
-uint16_t getBasePIDPower(double temperature, double increment, uint16_t *bias, uint16_t maxBias)
-{
+uint16_t getBasePIDPower(double temperature, double increment, uint16_t *bias, uint16_t maxBias) {
   uint16_t basePower, insulationPower, risePower, totalBasePower;
   float biasFactor;
-  
+
   temperature = constrain(temperature, 29, 250);
   // First, figure out the power required to maintain this temperature
   // Start by extrapolating the power using all elements at 120C
@@ -953,37 +956,34 @@ uint16_t getBasePIDPower(double temperature, double increment, uint16_t *bias, u
   //
   // Actual calculation:
   //   Bias factor = 2 / (Btop/Bmax + Bbottom/Bmax) = 2 * Bmax / (Btop + Bbottom)
-  biasFactor = (float) 2 * maxBias / (bias[TYPE_BOTTOM_ELEMENT] + bias[TYPE_TOP_ELEMENT]);
+  biasFactor = (float)2 * maxBias / (bias[TYPE_BOTTOM_ELEMENT] + bias[TYPE_TOP_ELEMENT]);
 
   totalBasePower = basePower + insulationPower + risePower;
-  SerialUSB.println("Base PID power at "+String(temperature)+"C:  B="+String(basePower)+" I="+String(insulationPower)+" R="+String(risePower)+" Total="+String(totalBasePower)+" bias="+String(biasFactor));
+  SerialUSB.println("Base PID power at " + String(temperature) + "C:  B=" + String(basePower) + " I=" + String(insulationPower) + " R=" + String(risePower) + " Total=" + String(totalBasePower) + " bias=" + String(biasFactor));
 
   // Put it all together
   totalBasePower = totalBasePower * biasFactor;
-  return totalBasePower < 100? totalBasePower : 100;
+  return totalBasePower < 100 ? totalBasePower : 100;
 }
 
-
 // Draw the outline of the graph, including axis, labels and dividers
-void drawGraphOutline(uint16_t graphMaxTemp, uint16_t graphMaxSeconds)
-{
+void drawGraphOutline(uint16_t graphMaxTemp, uint16_t graphMaxSeconds) {
   // Y-axis (temperature)
   tft.drawFastVLine(GRAPH_LEFT, GRAPH_TOP, GRAPH_HEIGHT, BLACK);
-  tft.drawFastVLine(GRAPH_LEFT+1, GRAPH_TOP, GRAPH_HEIGHT, BLACK);
+  tft.drawFastVLine(GRAPH_LEFT + 1, GRAPH_TOP, GRAPH_HEIGHT, BLACK);
   tft.drawFastVLine(GRAPH_LEFT + GRAPH_WIDTH / 2, GRAPH_TOP, GRAPH_HEIGHT, BLUE);
   tft.drawFastVLine(GRAPH_LEFT + GRAPH_WIDTH, GRAPH_TOP, GRAPH_HEIGHT, BLUE);
   sprintf(buffer100Bytes, "%d", graphMaxTemp);
   displayString(0, GRAPH_TOP - 5, FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
-  displayString(11, GRAPH_TOP -12 + GRAPH_HEIGHT / 2, FONT_9PT_BLACK_ON_WHITE, (char *) "~C");
-  displayString(28, GRAPH_TOP + GRAPH_HEIGHT - 7, FONT_9PT_BLACK_ON_WHITE, (char *) "0");
+  displayString(11, GRAPH_TOP - 12 + GRAPH_HEIGHT / 2, FONT_9PT_BLACK_ON_WHITE, (char *)"~C");
+  displayString(28, GRAPH_TOP + GRAPH_HEIGHT - 7, FONT_9PT_BLACK_ON_WHITE, (char *)"0");
 
   // X-axis (time)
   tft.drawFastHLine(GRAPH_LEFT, GRAPH_TOP, GRAPH_WIDTH, BLUE);
   tft.drawFastHLine(GRAPH_LEFT, GRAPH_TOP + GRAPH_HEIGHT / 2, GRAPH_WIDTH, BLUE);
   tft.drawFastHLine(GRAPH_LEFT, GRAPH_TOP + GRAPH_HEIGHT, GRAPH_WIDTH + 1, BLACK);
   tft.drawFastHLine(GRAPH_LEFT, GRAPH_TOP + GRAPH_HEIGHT + 1, GRAPH_WIDTH + 1, BLACK);
-  displayString(GRAPH_LEFT - 40 + GRAPH_WIDTH / 2, 300, FONT_9PT_BLACK_ON_WHITE, (char *) "seconds");
+  displayString(GRAPH_LEFT - 40 + GRAPH_WIDTH / 2, 300, FONT_9PT_BLACK_ON_WHITE, (char *)"seconds");
   sprintf(buffer100Bytes, "%d", graphMaxSeconds);
   displayString(GRAPH_LEFT - 40 + GRAPH_WIDTH, 300, FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
 }
-

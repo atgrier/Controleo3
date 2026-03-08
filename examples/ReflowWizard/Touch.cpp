@@ -1,13 +1,19 @@
 // Written by Peter Easton
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
+#include "Touch.h"
+#include "Prefs.h"
+#include "Render.h"
+#include "Screens.h"
+#include "Temperature.h"
+#include "Tones.h"
 
+#define MAX_CALIBRATION_TIME 60000  // 60 seconds
+#define MAX_TAP_TARGETS 20
+// #define SHOW_TAP_TARGETS
 
-#define MAX_CALIBRATION_TIME  60000  // 60 seconds
-#define MAX_TAP_TARGETS    20
-//#define SHOW_TAP_TARGETS
-
-static struct  {
+static struct
+{
   uint16_t left;
   uint16_t top;
   uint16_t right;
@@ -15,17 +21,16 @@ static struct  {
 } tapTarget[MAX_TAP_TARGETS];
 
 static uint8_t touchNumTargets = 0;
-static void (*touchCallbackFunction) ();
+static void (*touchCallbackFunction)();
 static uint16_t touchCallbackInterval;
-static void (*touchCallbackTemperatureUnitChange) (boolean);
+static void (*touchCallbackTemperatureUnitChange)(boolean);
 static uint8_t touchScreenshotTaps = 0;
 static boolean touchDisplayInCelsius = true;
 
 boolean drawTemperatureOnScreenNow;
 
 // Calibrate the touch screen
-void CalibrateTouchscreen()
-{
+void CalibrateTouchscreen() {
   uint32_t calibrationStartTime = millis();
   int16_t i, topLeftX, topLeftY, topRightX, topRightY, bottomLeftX, bottomLeftY, bottomRightX, bottomRightY, centerX, centerY;
 
@@ -34,10 +39,10 @@ void CalibrateTouchscreen()
 
 restart:
   while (1) {
-    displayString(141, 10, FONT_9PT_BLACK_ON_WHITE, (char *) "Tap the target to");
-    displayString(125, 40, FONT_9PT_BLACK_ON_WHITE, (char *) "calibrate the screen");
-    displayString(64, 290, FONT_9PT_BLACK_ON_WHITE, (char *) "Use a stylus for best accuracy");
-    
+    displayString(141, 10, FONT_9PT_BLACK_ON_WHITE, (char *)"Tap the target to");
+    displayString(125, 40, FONT_9PT_BLACK_ON_WHITE, (char *)"calibrate the screen");
+    displayString(64, 290, FONT_9PT_BLACK_ON_WHITE, (char *)"Use a stylus for best accuracy");
+
     // Draw crosshairs on the top-left corner of the screen
     drawCrosshairs(40, 40, true);
     // Debounce touch
@@ -69,7 +74,7 @@ restart:
     // Sanity check on test point
     if (topRightX > 1000 || topRightY < 2700)
       continue;
-      
+
     // Draw crosshairs on the bottom-right corner of the screen
     drawCrosshairs(440, 280, true);
     // Debounce touch
@@ -122,13 +127,13 @@ restart:
     SerialUSB.print(F("Y delta = "));
     SerialUSB.println(abs(averageY - centerY));
     if (abs(averageX - centerX) > 60 || abs(averageY - centerY) > 60) {
-      displayString(183, 240, FONT_9PT_BLACK_ON_WHITE, (char *) "Try again!");
+      displayString(183, 240, FONT_9PT_BLACK_ON_WHITE, (char *)"Try again!");
       continue;
     }
 
     // Done with collecting touch points now
     // Calculate the extremes of the touch panel
-    // The X-axis is 480 pixels with targets at 40 and 440 
+    // The X-axis is 480 pixels with targets at 40 and 440
     int16_t fourtyPixels = (topLeftX - topRightX) / 10;
     prefs.topLeftX = topLeftX + fourtyPixels;
     prefs.topRightX = topRightX - fourtyPixels;
@@ -141,7 +146,7 @@ restart:
     fourtyPixels = (topLeftY - bottomLeftY) / 6;
     prefs.topLeftY = topLeftY + fourtyPixels;
     prefs.bottomLeftY = bottomLeftY - fourtyPixels;
-  
+
     fourtyPixels = (topRightY - bottomRightY) / 6;
     prefs.topRightY = topRightY + fourtyPixels;
     prefs.bottomRightY = bottomRightY - fourtyPixels;
@@ -153,16 +158,16 @@ restart:
     tft.fillRect(125, 10, 230, 50, WHITE);
     tft.fillRect(183, 240, 114, 25, WHITE);
     tft.fillRect(64, 290, 360, 25, WHITE);
-    
+
     // Draw some text and buttons on the screen
-    displayString(21, 10, FONT_9PT_BLACK_ON_WHITE, (char *) "Draw on the screen to test calibration");
+    displayString(21, 10, FONT_9PT_BLACK_ON_WHITE, (char *)"Draw on the screen to test calibration");
     clearTouchTargets();
-    drawTouchButton(130, 100, 220, 181, BUTTON_LARGE_FONT, (char *) "Recalibrate");
-    drawTouchButton(130, 180, 220, 82, BUTTON_LARGE_FONT, (char *) "Done");
-    
+    drawTouchButton(130, 100, 220, 181, BUTTON_LARGE_FONT, (char *)"Recalibrate");
+    drawTouchButton(130, 180, 220, 82, BUTTON_LARGE_FONT, (char *)"Done");
+
     // Save the touch calibration settings immediately
     writePrefsToFlash();
-    
+
     // Debounce touch
     calibrationDebounce();
 
@@ -172,10 +177,10 @@ restart:
       if (!touch.read(&centerX, &centerY))
         continue;
       // Draw a blob where the touch was
-      tft.fillRect(centerX-1, centerY-1, 3, 3, RED);
+      tft.fillRect(centerX - 1, centerY - 1, 3, 3, RED);
 
       // See if the tap is in a valid area
-      for (i=0; i< touchNumTargets; i++) {
+      for (i = 0; i < touchNumTargets; i++) {
         if (centerX < tapTarget[i].left || centerX > tapTarget[i].right)
           continue;
         if (centerY < tapTarget[i].top || centerY > tapTarget[i].bottom)
@@ -191,28 +196,23 @@ restart:
           // Restart the abort calibration timer
           calibrationStartTime = millis();
           goto restart;
-        }
-        else {
+        } else {
           // Done button
           return;
         }
       }
     }
-  }  
+  }
 }
-
 
 // Draw the calibration crosshairs on the screen
-void drawCrosshairs(uint16_t x, uint16_t y, boolean draw)
-{
-  tft.fillRect(x-1, y-20, 3, 41, draw? BLUE: WHITE);
-  tft.fillRect(x-20, y-1, 41, 3, draw? BLUE: WHITE);
+void drawCrosshairs(uint16_t x, uint16_t y, boolean draw) {
+  tft.fillRect(x - 1, y - 20, 3, 41, draw ? BLUE : WHITE);
+  tft.fillRect(x - 20, y - 1, 41, 3, draw ? BLUE : WHITE);
 }
 
-
 // Debounce touches, but allow for tap-and-hold
-void debounce()
-{
+void debounce() {
   uint32_t now, lastTouch, startTime = millis();
   lastTouch = startTime;
 
@@ -233,10 +233,8 @@ void debounce()
   }
 }
 
-
 // Debounce, but with smaller times (used for non-critical changes, like changing C to F)
-void quickDebounce()
-{
+void quickDebounce() {
   uint32_t now, lastTouch, startTime = millis();
   lastTouch = startTime;
   while (1) {
@@ -256,13 +254,11 @@ void quickDebounce()
   }
 }
 
-
 // Wait for 250ms after the last touch
-void calibrationDebounce()
-{
+void calibrationDebounce() {
   uint32_t lastTouch = millis();
   delay(100);
-  while(1) {
+  while (1) {
     // Time to exit?
     if (millis() - lastTouch > 250)
       return;
@@ -273,19 +269,15 @@ void calibrationDebounce()
   }
 }
 
-
 // Send the calibration data to the touch driver
-void sendTouchCalibrationData()
-{
-    touch.calibrate(prefs.topLeftX,prefs.topRightX,prefs.bottomLeftX,prefs.bottomRightX,prefs.topLeftY,prefs.bottomLeftY,prefs.topRightY,prefs.bottomRightY);
+void sendTouchCalibrationData() {
+  touch.calibrate(prefs.topLeftX, prefs.topRightX, prefs.bottomLeftX, prefs.bottomRightX, prefs.topLeftY, prefs.bottomLeftY, prefs.topRightY, prefs.bottomRightY);
 }
-
 
 // The next section deals with handling user taps on the screen
 
 // Clear all tap data
-void clearTouchTargets()
-{
+void clearTouchTargets() {
   touchNumTargets = 0;
   touchCallbackFunction = 0;
   touchCallbackInterval = 0;
@@ -293,33 +285,27 @@ void clearTouchTargets()
   touchScreenshotTaps = 0;
 }
 
-
 // Callback function to call while waiting for touch.  Inverval is in milliseconds
-void setTouchIntervalCallback(void (*f) (), uint16_t interval)
-{
+void setTouchIntervalCallback(void (*f)(), uint16_t interval) {
   touchCallbackFunction = f;
   touchCallbackInterval = interval;
 }
 
-
 // Callback function when user taps in top-right corner to change temperature units
-void setTouchTemperatureUnitChangeCallback(void (*f) (boolean displayInCelsius))
-{
+void setTouchTemperatureUnitChangeCallback(void (*f)(boolean displayInCelsius)) {
   touchCallbackTemperatureUnitChange = f;
 }
-
 
 // Define touch areas on the screen.  None must be in the top 45 pixels of the screen
 // Two areas are always defined:
 // 1. Tap in top left corner to take screenshot
 // 2. Tap in top right corner to switch temperature reading between C and F
-void defineTouchArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
-{
+void defineTouchArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
   if (touchNumTargets >= MAX_TAP_TARGETS) {
     SerialUSB.println("Too many tap targets!!");
     return;
   }
-  
+
   tapTarget[touchNumTargets].left = x;
   tapTarget[touchNumTargets].top = y;
   tapTarget[touchNumTargets].right = x + w;
@@ -332,9 +318,7 @@ void defineTouchArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
   touchNumTargets++;
 }
 
-
-int8_t getTap(uint8_t mode)
-{
+int8_t getTap(uint8_t mode) {
   int16_t x, y;
   static uint32_t timeOfLastTemperatureUpdate = 0;
   boolean showTemperatureInHeader = (mode == SHOW_TEMPERATURE_IN_HEADER);
@@ -344,7 +328,7 @@ int8_t getTap(uint8_t mode)
     drawTemperatureOnScreenNow = false;
     displayTemperatureInHeader();
     if (touchCallbackTemperatureUnitChange)
-      (*touchCallbackTemperatureUnitChange) (touchDisplayInCelsius);
+      (*touchCallbackTemperatureUnitChange)(touchDisplayInCelsius);
   }
   // Debounce any taps that took us to this screen
   if (mode != CHECK_FOR_TAP_THEN_EXIT)
@@ -356,11 +340,11 @@ int8_t getTap(uint8_t mode)
     checkIfPrefsShouldBeWrittenToFlash();
 
     // Poll for valid tap reading
-    if (!touch.read(&x, &y))  {
+    if (!touch.read(&x, &y)) {
       // Exit if this is all the calling function wanted
       if (mode == CHECK_FOR_TAP_THEN_EXIT)
         return -1;
-      
+
       // Update the temperature display every second
       if (showTemperatureInHeader) {
         if (millis() - timeOfLastTemperatureUpdate > 1000) {
@@ -376,7 +360,7 @@ int8_t getTap(uint8_t mode)
     }
 
     // See if the tap is in a valid area
-    for (uint8_t i=0; i< touchNumTargets; i++) {
+    for (uint8_t i = 0; i < touchNumTargets; i++) {
       if (x < tapTarget[i].left || x > tapTarget[i].right)
         continue;
       if (y < tapTarget[i].top || y > tapTarget[i].bottom)
@@ -402,7 +386,7 @@ int8_t getTap(uint8_t mode)
       touchDisplayInCelsius = !touchDisplayInCelsius;
       displayTemperatureInHeader();
       if (touchCallbackTemperatureUnitChange)
-        (*touchCallbackTemperatureUnitChange) (touchDisplayInCelsius);
+        (*touchCallbackTemperatureUnitChange)(touchDisplayInCelsius);
       playTones(TUNE_BUTTON_PRESSED);
       quickDebounce();
     }
@@ -412,9 +396,7 @@ int8_t getTap(uint8_t mode)
   return 0;
 }
 
-
-void touchCallback() 
-{
+void touchCallback() {
   static uint32_t lastCalled = 0;
   uint32_t now;
 
@@ -431,10 +413,8 @@ void touchCallback()
   }
 }
 
-
 // Display the temperature on the screen once per second
-void displayTemperatureInHeader()
-{
+void displayTemperatureInHeader() {
   float temperature = getCurrentTemperature();
   char *str = getTemperatureString(buffer100Bytes, temperature, touchDisplayInCelsius);
 
@@ -442,9 +422,62 @@ void displayTemperatureInHeader()
   if (IS_MAX31856_ERROR(temperature)) {
     tft.fillRect(366, 11, 110, 19, WHITE);
     displayString(418, 11, FONT_9PT_BLACK_ON_WHITE_FIXED, str);
-  }
-  else {
+  } else {
     displayFixedWidthString(351, 11, str, 9, FONT_9PT_BLACK_ON_WHITE_FIXED);
   }
 }
 
+// Fixed BMP file header for screenshots
+const char bmpHeader[54] PROGMEM = {
+  0x42, 0x4d, 0x36, 0x8, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0,
+  0x36, 0x0, 0x0, 0x0, 0x28, 0x0, 0x0, 0x0, 0xe0, 0x1,
+  0x0, 0x0, 0xC0, 0xFE, 0xFF, 0xFF, 0x1, 0x0, 0x18, 0x0,
+  0x0, 0x0, 0x0, 0x0, 0x0, 0x8, 0x7, 0x0, 0x13, 0xb,
+  0x0, 0x0, 0x13, 0xb, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+  0x0, 0x0, 0x0, 0x0
+};
+
+// Take a screenshot.  This is a "blocking" call - so nothing else gets processed
+// while this is happening
+void takeScreenshot() {
+  char buf[320 * 3];
+  // Initialize the SD card
+  if (!SD.begin()) {
+    SerialUSB.println("Card failed, or not present");
+    return;
+  }
+
+  // Open the file for writing
+  sprintf(buf, "C3_%05d.bmp", prefs.screenshotNumber);
+  File dataFile = SD.open(buf, FILE_WRITE);
+  if (!dataFile) {
+    SerialUSB.println("Can't open " + String(buf));
+    return;
+  }
+  SerialUSB.println("Writing screenshot to " + String(buf));
+
+  // Write the bitmap header
+  memcpy_P(buf, bmpHeader, 54);
+  dataFile.seek(0);
+  dataFile.write(buf, 54);
+
+  // Start the screen read
+  tft.startReadBitmap(0, 0, 480, 320);
+
+  // Keeping reading from the screen and writing to the SD card
+  for (uint16_t i = 0; i < 480; i++) {
+    tft.readBitmap24bit((uint8_t *)buf, 320);
+    dataFile.write(buf, 320 * 3);
+    // Beep every 1/12 of the operation to let the user know something is happening
+    if (i % 40 == 0)
+      playTones(TUNE_SCREENSHOT_BUSY);
+  }
+  tft.endReadBitmap();
+  dataFile.close();
+
+  // Increase the file number for the next screenshot
+  prefs.screenshotNumber = (prefs.screenshotNumber + 1) % 10000;
+  savePrefs();
+  playTones(TUNE_SCREENSHOT_DONE);
+  SerialUSB.println("Screenshot written!");
+}

@@ -1,15 +1,16 @@
 // Written by Peter Easton
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
-
+#include "Utility.h"
+#include "Outputs.h"
+#include "Render.h"
 
 // Convert the duration into a readable string
-void secondsToEnglishString(char *str, uint32_t seconds)
-{
+void secondsToEnglishString(char *str, uint32_t seconds) {
   boolean hasHours = false;
   // Take care of hours
   if (seconds >= 3600) {
-    sprintf(str, "%ld hour%c", seconds/3600, seconds>=7200? 's':0);
+    sprintf(str, "%ld hour%c", seconds / 3600, seconds >= 7200 ? 's' : 0);
     seconds = seconds % 3600;
     hasHours = true;
     str += strlen(str);
@@ -24,25 +25,21 @@ void secondsToEnglishString(char *str, uint32_t seconds)
   }
 }
 
-
 // Display seconds in the format hhh:mm:ss
-char *secondsInClockFormat(char *str, uint32_t seconds)
-{
-  uint16_t hours = seconds/3600;
+char *secondsInClockFormat(char *str, uint32_t seconds) {
+  uint16_t hours = seconds / 3600;
   uint16_t minutes = (seconds % 3600) / 60;
   seconds = seconds % 60;
   if (hours)
     sprintf(str, "%d:%02d:%02ld", hours, minutes, seconds);
   else
-    sprintf(str, "%d:%02ld", minutes,seconds);
+    sprintf(str, "%d:%02ld", minutes, seconds);
   return str;
 }
 
-
 // Animate the heating element and fan icons, based on their current state
 // This function is called 50 times per second
-void animateIcons(uint16_t x)
-{
+void animateIcons(uint16_t x) {
   static uint16_t lastBitmap[NUMBER_OF_OUTPUTS];
   static uint8_t animateFan = 0;
   static uint8_t animationPhase = 0;
@@ -53,12 +50,12 @@ void animateIcons(uint16_t x)
   // This can happen if the user finishes a bake, then starts another one.
   uint32_t now = millis();
   if (now - lastUpdate > 100) {
-    for (int8_t i=0; i < NUMBER_OF_OUTPUTS; i++)
+    for (int8_t i = 0; i < NUMBER_OF_OUTPUTS; i++)
       lastBitmap[i] = 0;
     lastUpdate = now;
   }
-  
-  for (int8_t i=0; i < NUMBER_OF_OUTPUTS; i++) {
+
+  for (int8_t i = 0; i < NUMBER_OF_OUTPUTS; i++) {
     // Don't display anything if the output is unused
     if (prefs.outputType[i] == TYPE_UNUSED)
       continue;
@@ -69,8 +66,7 @@ void animateIcons(uint16_t x)
         bitmap = BITMAP_ELEMENT_ON;
       else
         bitmap = BITMAP_ELEMENT_OFF;
-    }
-    else {
+    } else {
       // Output must be a fan
       if (prefs.outputType[i] == TYPE_CONVECTION_FAN)
         bitmap = BITMAP_CONVECTION_FAN1;
@@ -87,7 +83,7 @@ void animateIcons(uint16_t x)
       renderBitmap(bitmap, x, 4);
       lastBitmap[i] = bitmap;
     }
-    x +=40;
+    x += 40;
   }
   // Go to the next animation image the next time this function is called
   if (++animateFan == 3) {
@@ -95,4 +91,3 @@ void animateIcons(uint16_t x)
     animateFan = 0;
   }
 }
-
