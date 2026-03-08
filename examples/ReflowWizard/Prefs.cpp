@@ -1,56 +1,53 @@
 // Written by Peter Easton
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
-
+#include "Prefs.h"
 
 // Preferences are stored in 4K blocks.  There are 4 blocks, and they are rotated for each write to
 // maximixe redundancy and minimize write wear.  Blocks have a 32-bit sequence number as the first
 // 4 bytes.  This number is increased after each write to be able to identify the latest prefs.
 // Blocks are initialized to 0xFF's after erase, so prefrences should be added with this in mind.
 
-
-#define NO_OF_PREFS_BLOCKS          4
-#define PAGES_PER_PREFS_BLOCK       16
+#define NO_OF_PREFS_BLOCKS 4
+#define PAGES_PER_PREFS_BLOCK 16
 
 uint8_t lastPrefsBlock = 0;
 uint32_t timeOfLastSavePrefsRequest = 0;
 
-void getPrefs() 
-{
+void getPrefs() {
   // Sanity check on the size of the prefences
-  if (sizeof(prefs) > 4096)
-  {
+  if (sizeof(prefs) > 4096) {
     SerialUSB.println("Prefs size must not exceed 4Kb!!!!!!!!");
-    // Hopefully getting a massive delay while developing new code alert you to this situation 
+    // Hopefully getting a massive delay while developing new code alert you to this situation
     delay(10000);
   }
-  
+
   // Get the prefs with the highest sequence number
   uint32_t highestSequenceNumber = 0, seqNo;
   uint8_t prefsToUse = 0;
-  for (uint8_t i=0; i < NO_OF_PREFS_BLOCKS; i++) {
-      flash.startRead(i * PAGES_PER_PREFS_BLOCK, sizeof(uint32_t), (uint8_t *) &seqNo);
-      flash.endRead();
-      // Skip blocks that are erased
-      if (seqNo == 0xFFFFFFFF)
-        continue;
-      // Is this the highest sequence number?
-      if (seqNo <= highestSequenceNumber)
-        continue;
-      // So far, this is the prefs block to use
-      highestSequenceNumber = seqNo;
-      prefsToUse = i;
+  for (uint8_t i = 0; i < NO_OF_PREFS_BLOCKS; i++) {
+    flash.startRead(i * PAGES_PER_PREFS_BLOCK, sizeof(uint32_t), (uint8_t *)&seqNo);
+    flash.endRead();
+    // Skip blocks that are erased
+    if (seqNo == 0xFFFFFFFF)
+      continue;
+    // Is this the highest sequence number?
+    if (seqNo <= highestSequenceNumber)
+      continue;
+    // So far, this is the prefs block to use
+    highestSequenceNumber = seqNo;
+    prefsToUse = i;
   }
 
   // Read all the prefs in now
-  flash.startRead(prefsToUse * PAGES_PER_PREFS_BLOCK, sizeof(Controleo3Prefs), (uint8_t *) &prefs);
+  flash.startRead(prefsToUse * PAGES_PER_PREFS_BLOCK, sizeof(Controleo3Prefs), (uint8_t *)&prefs);
   flash.endRead();
 
   // If this is the first time the prefs are read in, initialize them
   if (prefs.sequenceNumber == 0xFFFFFFFF) {
     // Initialize the whole of prefs to zero.
-    uint8_t *p = (uint8_t *) &prefs;
-    for (uint32_t i=0; i < sizeof(prefs); i++)
+    uint8_t *p = (uint8_t *)&prefs;
+    for (uint32_t i = 0; i < sizeof(prefs); i++)
       *p++ = 0;
 
     // Only need to initialize non-zero prefs here
@@ -75,20 +72,16 @@ void getPrefs()
   lastPrefsBlock = prefsToUse;
 }
 
-
 // Save the prefs to external flash
-void savePrefs()
-{
+void savePrefs() {
   // Don't write prefs immediately.  Wait a short time in case the user is moving quickly between items
   // Doing this will reduce the number of writes to the flash, saving flash wear.
   // It also makes "tap and hold" more responsive.
   timeOfLastSavePrefsRequest = millis();
 }
 
-
 // This is called while waiting for the user to tap the screen
-void checkIfPrefsShouldBeWrittenToFlash()
-{
+void checkIfPrefsShouldBeWrittenToFlash() {
   // Is there a pending prefs write?
   if (timeOfLastSavePrefsRequest == 0)
     return;
@@ -99,10 +92,8 @@ void checkIfPrefsShouldBeWrittenToFlash()
   }
 }
 
-
-// Flash writes are good for 50,000 cycles - and there are 4 blocks used for prefs = 200,000 cycles.  
-void writePrefsToFlash() 
-{
+// Flash writes are good for 50,000 cycles - and there are 4 blocks used for prefs = 200,000 cycles.
+void writePrefsToFlash() {
   // Increase the preference sequence number
   prefs.sequenceNumber++;
 
@@ -126,10 +117,10 @@ void writePrefsToFlash()
 
   // There are 16 x 256 byte pages in 4K
   uint16_t page = lastPrefsBlock * PAGES_PER_PREFS_BLOCK;
-  uint8_t *p = (uint8_t *) &prefs;
+  uint8_t *p = (uint8_t *)&prefs;
   while (prefsSize > 0) {
-    flash.write(page++, prefsSize > 256? 256: prefsSize, p);
-    prefsSize = prefsSize > 256? prefsSize - 256: 0;
+    flash.write(page++, prefsSize > 256 ? 256 : prefsSize, p);
+    prefsSize = prefsSize > 256 ? prefsSize - 256 : 0;
     p += 256;
   }
   // Protect flash again, now that writing is done
@@ -139,15 +130,13 @@ void writePrefsToFlash()
   timeOfLastSavePrefsRequest = 0;
 }
 
-
 // This performs a factory reset, erasing preferences and profiles
-void factoryReset(boolean saveTouchCalibrationData)
-{
+void factoryReset(boolean saveTouchCalibrationData) {
   uint32_t sequenceNumber = prefs.sequenceNumber;
-  
+
   // Save the touchscreen calibration data
   memcpy(buffer100Bytes, &prefs.topLeftX, 16);
-  flash.factoryReset(); 
+  flash.factoryReset();
   // Get the factory-default prefs from flash
   getPrefs();
   // Restore the touchscreen data if touchscreen calibration data should be saved
@@ -157,4 +146,3 @@ void factoryReset(boolean saveTouchCalibrationData)
   prefs.sequenceNumber = sequenceNumber;
   writePrefsToFlash();
 }
-
