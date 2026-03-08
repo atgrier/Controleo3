@@ -8,7 +8,7 @@
 #include <Controleo3.h>  // Hardware-specific library
 #include <stdint.h>
 
-#define CONTROLEO3_VERSION "1.5"
+#define CONTROLEO3_VERSION "1.5R"
 
 // Fonts
 #define FONT_9PT_BLACK_ON_WHITE 0
