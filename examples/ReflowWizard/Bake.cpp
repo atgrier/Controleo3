@@ -2,6 +2,7 @@
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
 #include "Bake.h"
+#include "BakeVars.h"
 #include "Help.h"
 #include "Outputs.h"
 #include "Prefs.h"

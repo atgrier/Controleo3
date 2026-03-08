@@ -2,6 +2,7 @@
 // Released under the MIT license
 // Build a reflow oven: https://whizoo.com
 #include "Screens.h"
+#include "ScreensVars.h"
 #include "Bake.h"
 #include "Help.h"
 #include "Learn.h"

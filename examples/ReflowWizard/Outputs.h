@@ -2,7 +2,7 @@
 #define OUTPUTS_H
 #include "ReflowWizard.h"
 
-volatile uint32_t *portAOut, *portAMode, *portBOut, *portBMode;
+extern volatile uint32_t *portAOut, *portAMode, *portBOut, *portBMode;
 
 void initOutputs();
 void setOutput(uint8_t outputNumber, boolean state);

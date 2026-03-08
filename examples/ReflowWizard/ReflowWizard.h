@@ -137,15 +137,6 @@
 #define MAX_TOP_DUTY_CYCLE 80
 #define MAX_BOOST_DUTY_CYCLE 60
 
-const char *outputDescription[NO_OF_TYPES] = {"Unused", "Bottom Element", "Top Element", "Boost Element", "Convection Fan", "Cooling Fan"};
-const char *longOutputDescription[NO_OF_TYPES] = {
-    "",
-    "Controls the bottom heating element.",
-    "Controls the top heating element.",
-    "Controls the boost heating element.",
-    "On at start, off once cooling is done.",
-    "Turns on to cool the oven."};
-
 // Reflow defines
 #define REFLOW_PHASE_NEXT_COMMAND 0  // Get the next command (token) in the profile
 #define REFLOW_WAITING_FOR_TIME 1    // Waiting for a set time to pass
@@ -163,15 +154,6 @@ const char *longOutputDescription[NO_OF_TYPES] = {
 #define BAKE_DOOR_LEAVE_CLOSED 2
 #define BAKE_DOOR_LAST_OPTION 2
 
-const char *bakeDoorDescription[BAKE_DOOR_LAST_OPTION + 1] = {
-    "Open oven door after bake.",
-    "Open after bake, close when cool.",
-    "Leave oven door closed."};
-
-const char *bakeUseCoolingFan[2] = {
-    "Use cooling fan once baking is done.",
-    "Don't use the cooling fan."};
-
 #define BAKE_MAX_DURATION 127    // 127 = 168 hours (see getBakeSeconds)
 #define BAKE_TEMPERATURE_STEP 5  // Step between temperature settings
 #define BAKE_MIN_TEMPERATURE 40  // Minimum temperature for baking
@@ -183,8 +165,6 @@ const char *bakeUseCoolingFan[2] = {
 #define BAKING_PHASE_COOLING 3       // Wait till the oven has cooled down to 50°C
 #define BAKING_PHASE_DONE 4          // Baking is done.  Stay on this screen
 #define BAKING_PHASE_ABORT 5         // Baking was aborted
-const char *bakePhaseStr[] = {"Pre-heat", "Baking", "Cooling", "Baking has finished", "Baking has finished", ""};
-const uint8_t bakePhaseStrPosition[] = {190, 202, 198, 128, 128, 0};
 
 // Should the temperature be displayed while waiting for a tap?
 #define DONT_SHOW_TEMPERATURE 0
@@ -293,18 +273,19 @@ struct Controleo3Prefs
   uint16_t logNumber;                    // Log file sequential number
 
   uint8_t spare[96]; // Spare bytes that are initialized to zero.  Aids future expansion
-} prefs;
+};
+extern struct Controleo3Prefs prefs;
 
 // Global temporary buffers (used everywhere)
-char buffer100Bytes[100];
+extern char buffer100Bytes[100];
 
-Sd2Card card;
-SdVolume volume;
-SdFile root;
+extern Sd2Card card;
+extern SdVolume volume;
+extern SdFile root;
 
-Controleo3LCD tft;
-Controleo3Touch touch;
-Controleo3Flash flash;
-Controleo3MAX31856 thermocouple;
+extern Controleo3LCD tft;
+extern Controleo3Touch touch;
+extern Controleo3Flash flash;
+extern Controleo3MAX31856 thermocouple;
 
 #endif

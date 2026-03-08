@@ -23,6 +23,7 @@
 //
 //  On the board (and in the build guide) the outputs are 1 through 6. In software they are 0 through 5.
 
+volatile uint32_t *portAOut, *portAMode, *portBOut, *portBMode;
 static boolean outputState[NUMBER_OF_OUTPUTS];
 
 // Initialize the registers controlling the outputs, and turn them off

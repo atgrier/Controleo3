@@ -12,6 +12,19 @@
 #include "Tones.h"
 #include "Touch.h"
 
+struct Controleo3Prefs prefs;
+
+char buffer100Bytes[100];
+
+Sd2Card card;
+SdVolume volume;
+SdFile root;
+
+Controleo3LCD tft;
+Controleo3Touch touch;
+Controleo3Flash flash;
+Controleo3MAX31856 thermocouple;
+
 void setup(void) {
   // First priority - turn off the relays!
   initOutputs();
