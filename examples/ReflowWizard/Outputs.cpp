@@ -27,7 +27,7 @@ volatile uint32_t *portAOut, *portAMode, *portBOut, *portBMode;
 static boolean outputState[NUMBER_OF_OUTPUTS];
 
 // Initialize the registers controlling the outputs, and turn them off
-void initOutputs() {
+void initOutputs(bool initial) {
   // Get pointer to the registers
   portAOut = portOutputRegister(digitalPinToPort(5));
   portAMode = portModeRegister(digitalPinToPort(5));
@@ -40,7 +40,12 @@ void initOutputs() {
 
   // Set all outputs low (turn off relays)
   for (int i = 0; i <= NUMBER_OF_OUTPUTS; i++)
-    setOutput(i, LOW);
+    if (initial && ((i == 2) || (i == 3))) {
+      // Outputs 3 and 4 are inverted by default
+      setOutput(i, HIGH);
+    } else {
+      setOutput(i, LOW);
+    }
 }
 
 // Turn an output on or off

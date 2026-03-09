@@ -27,7 +27,7 @@ Controleo3MAX31856 thermocouple;
 
 void setup(void) {
   // First priority - turn off the relays!
-  initOutputs();
+  initOutputs(true);
 
   // See if there is a SD card present
   pinMode(SD_DETECT_PIN, INPUT_PULLUP);
@@ -49,6 +49,7 @@ void setup(void) {
       getPrefs();
       factoryReset(false);
     }
+    initOutputs(false);
   }
 
   // Get the splash screen up as quickly as possible
@@ -68,6 +69,7 @@ void setup(void) {
 
   // Get the prefs from external flash
   getPrefs();
+  initOutputs(false);
 
   // Initialize the MAX31856's registers
   thermocouple.begin();
