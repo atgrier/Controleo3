@@ -168,6 +168,13 @@ void TC3_Handler() {
   }
 }
 
+// Enable TC and wait for sync
+void _reenable(TcCount16 *TC) {
+  TC->CTRLA.reg |= TC_CTRLA_ENABLE;
+  while (TC->STATUS.bit.SYNCBUSY == 1)
+    ;
+}
+
 // Move the servo to servoDegrees, in timeToTake milliseconds (1/1000 second)
 void setServoPosition(uint8_t servoDegrees, uint16_t timeToTake) {
   TcCount16 *TC = (TcCount16 *)TC3;  // Get timer struct
@@ -186,8 +193,10 @@ void setServoPosition(uint8_t servoDegrees, uint16_t timeToTake) {
   uint16_t servoEndValue = degreesToTimerCounter(servoDegrees);
 
   // If the servo is already in this position, then don't do anything
-  if (servoEndValue == TC->CC[1].reg)
-    goto reenable;
+  if (servoEndValue == TC->CC[1].reg) {
+    _reenable(TC);
+    return;
+  }
 
   // Figure out how many movements this will take (a movement is made every 20ms)
   servoMovements = timeToTake / 20;
@@ -204,11 +213,7 @@ void setServoPosition(uint8_t servoDegrees, uint16_t timeToTake) {
     servoMovements = (servoEndValue - TC->CC[1].reg) / servoIncrement;
   }
 
-reenable:
-  // Enable TC and wait for sync
-  TC->CTRLA.reg |= TC_CTRLA_ENABLE;
-  while (TC->STATUS.bit.SYNCBUSY == 1)
-    ;
+  _reenable(TC);
 }
 
 // Convert degrees (0-180) to a timer counter value

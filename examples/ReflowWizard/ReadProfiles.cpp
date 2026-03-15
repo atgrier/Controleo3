@@ -76,6 +76,19 @@ void processDirectory(File dir) {
   }
 }
 
+void _tokenError() {
+  // If there was any error, throw the entire thing away.  Better that the user see that the profile
+  // wasn't read than it was read - but not knowing if it was read correctly or not.
+  // Unfortunately this doesn't take into account incorrectly spelt or ordered tokens (e.g. "door close" instead of "close door")
+
+  // Delete this profile
+  deleteProfile(prefs.numProfiles);
+
+  // Save the profiles
+  savePrefs();
+  SerialUSB.println("Error processing file - discarded");
+}
+
 // Process a file with a TXT extension
 void processFile(File file) {
   profiles *newProfile = 0;
@@ -115,12 +128,14 @@ void processFile(File file) {
         // Has a name been extracted from the file already?
         if (newProfile) {
           SerialUSB.println("Profile has more than one name!");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         // Get the name of the profile
         if (!getStringFromFile(file, buffer100Bytes, MAX_PROFILE_NAME_LENGTH)) {
           SerialUSB.println("Unable to find profile name");
-          goto tokenError;
+          _tokenError();
+          return;
         }
 
         // If this profile name exists then it is probably being updated.  Delete it so the new one can be saved
@@ -129,7 +144,8 @@ void processFile(File file) {
         // Is there a spare profile slot?
         if (prefs.numProfiles >= MAX_PROFILES) {
           SerialUSB.println("No space to store profile");
-          goto tokenError;
+          _tokenError();
+          return;
         }
 
         // Point to the first available space that this profile will be saved to
@@ -140,8 +156,10 @@ void processFile(File file) {
 
         // Allocate the first flash block to this profile
         newProfile->startBlock = getFreeProfileBlock();
-        if (!newProfile->startBlock)
-          goto tokenError;
+        if (!newProfile->startBlock) {
+          _tokenError();
+          return;
+        }
 
         // The flash block should be erased already - but make sure
         flash.eraseProfileBlock(newProfile->startBlock);
@@ -167,7 +185,8 @@ void processFile(File file) {
         // This should be followed by a string that should be displayed
         if (!getStringFromFile(file, buffer100Bytes, MAX_PROFILE_DISPLAY_STR)) {
           SerialUSB.println("Error getting display string");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         // Save the display string
         saveTokenAndStringToFlash(token, buffer100Bytes);
@@ -178,7 +197,8 @@ void processFile(File file) {
         // This should be followed by a string that should be displayed
         if (!getStringFromFile(file, buffer100Bytes, MAX_PROFILE_TITLE_STR)) {
           SerialUSB.println("Error getting title string");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         // Save the title string
         saveTokenAndStringToFlash(token, buffer100Bytes);
@@ -191,15 +211,18 @@ void processFile(File file) {
         // This should be followed by 3 numbers, indicating bottom/top/boost
         if (!getNumberFromFile(file, &numbers[0])) {
           SerialUSB.println("Error getting number 1/3");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         if (!getNumberFromFile(file, &numbers[1])) {
           SerialUSB.println("Error getting number 2/3");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         if (!getNumberFromFile(file, &numbers[2])) {
           SerialUSB.println("Error getting number 3/3");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         // Save the token and numbers to flash
         saveTokenAndNumbersToFlash(token, numbers, 3);
@@ -213,11 +236,13 @@ void processFile(File file) {
         // These should be followed by 2 numbers
         if (!getNumberFromFile(file, &numbers[0])) {
           SerialUSB.println("Error getting number 1/2");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         if (!getNumberFromFile(file, &numbers[1])) {
           SerialUSB.println("Error getting number 2/2");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         // Save the token and numbers to flash
         saveTokenAndNumbersToFlash(token, numbers, 2);
@@ -240,7 +265,8 @@ void processFile(File file) {
         // These require 1 parameter
         if (!getNumberFromFile(file, &numbers[0])) {
           SerialUSB.println("Error getting number");
-          goto tokenError;
+          _tokenError();
+          return;
         }
         // Save the oven open/close to flash
         saveTokenAndNumbersToFlash(token, numbers, 1);
@@ -268,26 +294,15 @@ void processFile(File file) {
 
   // Done reading the file
   // Save the tokens in the profile to flash.  There might be an error if there were too many tokens in the file
-  if (!writeTokenBufferToFlash(true))
-    goto tokenError;
+  if (!writeTokenBufferToFlash(true)) {
+    _tokenError();
+    return;
+  }
 
   // Sort the profiles to keep them in alphabetical order.  This also updates prefs.numProfiles
   sortProfiles();
   // Save the preferences
   savePrefs();
-  return;
-
-tokenError:
-  // If there was any error, throw the entire thing away.  Better that the user see that the profile
-  // wasn't read than it was read - but not knowing if it was read correctly or not.
-  // Unfortunately this doesn't take into account incorrectly spelt or ordered tokens (e.g. "door close" instead of "close door")
-
-  // Delete this profile
-  deleteProfile(prefs.numProfiles);
-
-  // Save the profiles
-  savePrefs();
-  SerialUSB.println("Error processing file - discarded");
 }
 
 // Set the tokens back to the beginning to continue the search for them

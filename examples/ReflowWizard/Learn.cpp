@@ -33,57 +33,12 @@
 
 #define NO_PERFORMANCE_INDICATOR 101  // Don't draw an indicator on the performance bar
 
-// Stay in this function until learning is done or canceled
-void learn() {
-  uint32_t lastLoopTime = millis();
-  uint16_t secondsLeftOfLearning, secondsLeftOfPhase, secondsIntoPhase = 0;
-  uint8_t counter = 0;
-  uint8_t learningPhase = LEARNING_PHASE_INITIAL_RAMP;
-  double currentTemperature = 0;
-  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS];
-  boolean isOneSecondInterval = false;
-  uint16_t iconsX, i;
-  uint8_t learningDutyCycle, learningIntegral = 0, coolingDuration = 0;
-  boolean isHeating = true;
-  long lastOverTempTime = 0;
-  boolean abortDialogIsOnScreen = false;
-
-  // Verify the outputs are configured
-  if (areOutputsConfigured() == false) {
-    showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
-    return;
-  }
-
-  // Initialize varaibles used for learning
-  secondsLeftOfLearning = LEARNING_RAMP_TO_TEMP_DURATION + LEARNING_CONSTANT_TEMP_DURATION + LEARNING_INERTIA_DURATION + LEARNING_COOLING_DURATION;
-  secondsLeftOfPhase = LEARNING_RAMP_TO_TEMP_DURATION + LEARNING_CONSTANT_TEMP_DURATION;
-
-  // Start with a duty cycle appropriate to the testing temperature
-  learningDutyCycle = 60;
-
-  // Calculate the centered position of the heating and fan icons (icons are 32x32)
-  iconsX = 240 - (numOutputsConfigured() * 20) + 4;  // (2*20) - 32 = 8.  8/2 = 4
-
-  // Turn on any convection fans
-  setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_ON, COOLING_FAN_OFF);
-
-  // Stagger the element start cycle to avoid abrupt changes in current draw
-  // Simple method: there are 6 outputs but the first ones are likely the heating elements
-  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
-    elementDutyCounter[i] = (65 * i) % 100;
-
-  // Set up the screen in preparation for learning
-  // Erase the bottom part of the screen
-  tft.fillRect(0, 45, 480, 270, WHITE);
-
-  // Display the static strings
-  displayString(10, LINE(0), FONT_9PT_BLACK_ON_WHITE, (char *)"Learning has started.  First, figure out");
-  displayString(10, LINE(1), FONT_9PT_BLACK_ON_WHITE, (char *)"the power required to maintain 120~C.");
-  SerialUSB.println("Learning started.  Figure out power needed to maintain 120C");
-
-  // Ug, hate goto's!  But this saves a lot of extraneous code.
-userChangedMindAboutAborting:
-
+void _learnRoutine(
+  uint32_t lastLoopTime, uint16_t secondsLeftOfLearning, uint16_t secondsLeftOfPhase,
+  uint16_t secondsIntoPhase, uint8_t counter, uint8_t learningPhase, double currentTemperature,
+  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS], boolean isOneSecondInterval, uint16_t iconsX,
+  uint16_t i, uint8_t learningDutyCycle, uint8_t learningIntegral, uint8_t coolingDuration,
+  boolean isHeating, long lastOverTempTime, boolean abortDialogIsOnScreen) {
   // Setup the tap targets on this screen
   clearTouchTargets();
   drawButton(110, 230, 260, 87, BUTTON_LARGE_FONT, (char *)"STOP");
@@ -129,7 +84,11 @@ userChangedMindAboutAborting:
         abortDialogIsOnScreen = false;
         counter = 0;
         // Redraw the screen under the dialog
-        goto userChangedMindAboutAborting;
+        _learnRoutine(lastLoopTime, secondsLeftOfLearning, secondsLeftOfPhase, secondsIntoPhase,
+                      counter, learningPhase, currentTemperature, elementDutyCounter,
+                      isOneSecondInterval, iconsX, i, learningDutyCycle, learningIntegral,
+                      coolingDuration, isHeating, lastOverTempTime, abortDialogIsOnScreen);
+        return;
     }
 
     // Execute this loop every 20ms (50 times per second)
@@ -499,6 +458,60 @@ userChangedMindAboutAborting:
 
     animateIcons(iconsX);
   }  // end of big while loop
+}
+
+// Stay in this function until learning is done or canceled
+void learn() {
+  uint32_t lastLoopTime = millis();
+  uint16_t secondsLeftOfLearning, secondsLeftOfPhase, secondsIntoPhase = 0;
+  uint8_t counter = 0;
+  uint8_t learningPhase = LEARNING_PHASE_INITIAL_RAMP;
+  double currentTemperature = 0;
+  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS];
+  boolean isOneSecondInterval = false;
+  uint16_t iconsX, i;
+  uint8_t learningDutyCycle, learningIntegral = 0, coolingDuration = 0;
+  boolean isHeating = true;
+  long lastOverTempTime = 0;
+  boolean abortDialogIsOnScreen = false;
+
+  // Verify the outputs are configured
+  if (areOutputsConfigured() == false) {
+    showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
+    return;
+  }
+
+  // Initialize varaibles used for learning
+  secondsLeftOfLearning = LEARNING_RAMP_TO_TEMP_DURATION + LEARNING_CONSTANT_TEMP_DURATION + LEARNING_INERTIA_DURATION + LEARNING_COOLING_DURATION;
+  secondsLeftOfPhase = LEARNING_RAMP_TO_TEMP_DURATION + LEARNING_CONSTANT_TEMP_DURATION;
+
+  // Start with a duty cycle appropriate to the testing temperature
+  learningDutyCycle = 60;
+
+  // Calculate the centered position of the heating and fan icons (icons are 32x32)
+  iconsX = 240 - (numOutputsConfigured() * 20) + 4;  // (2*20) - 32 = 8.  8/2 = 4
+
+  // Turn on any convection fans
+  setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_ON, COOLING_FAN_OFF);
+
+  // Stagger the element start cycle to avoid abrupt changes in current draw
+  // Simple method: there are 6 outputs but the first ones are likely the heating elements
+  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
+    elementDutyCounter[i] = (65 * i) % 100;
+
+  // Set up the screen in preparation for learning
+  // Erase the bottom part of the screen
+  tft.fillRect(0, 45, 480, 270, WHITE);
+
+  // Display the static strings
+  displayString(10, LINE(0), FONT_9PT_BLACK_ON_WHITE, (char *)"Learning has started.  First, figure out");
+  displayString(10, LINE(1), FONT_9PT_BLACK_ON_WHITE, (char *)"the power required to maintain 120~C.");
+  SerialUSB.println("Learning started.  Figure out power needed to maintain 120C");
+
+  _learnRoutine(lastLoopTime, secondsLeftOfLearning, secondsLeftOfPhase, secondsIntoPhase, counter,
+                learningPhase, currentTemperature, elementDutyCounter, isOneSecondInterval, iconsX,
+                i, learningDutyCycle, learningIntegral, coolingDuration, isHeating,
+                lastOverTempTime, abortDialogIsOnScreen);
 }
 
 // Print baking information to the serial port so it can be plotted

@@ -2,7 +2,7 @@
 #define SCREENS_H
 #include "ReflowWizard.h"
 
-void showScreen(uint8_t screen);
+void showScreen(uint8_t _screen);
 void drawTouchButton(uint16_t x, uint16_t y, uint16_t width, uint16_t textWidth, boolean useLargeFont, char *text);
 void eraseHeader();
 void displayHeader(char *text, boolean isSetting);

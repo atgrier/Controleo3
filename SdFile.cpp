@@ -1337,21 +1337,24 @@ uint8_t SdFile::truncate(uint32_t length)
  */
 size_t SdFile::write(const void *buf, uint16_t nbyte)
 {
-  // convert void* to uint8_t*  -  must be before goto statements
+  // convert void* to uint8_t*
   const uint8_t *src = reinterpret_cast<const uint8_t *>(buf);
 
-  // number of bytes left to write  -  must be before goto statements
+  // number of bytes left to write
   uint16_t nToWrite = nbyte;
 
   // error if not a normal file or is read-only
   if (!isFile() || !(flags_ & O_WRITE))
-    goto writeErrorReturn;
+  {
+    setWriteError();
+    return 0;
+  }
 
   // seek to end of file if append flag
-  if ((flags_ & O_APPEND) && curPosition_ != fileSize_)
+  if (((flags_ & O_APPEND) && curPosition_ != fileSize_) && !seekEnd())
   {
-    if (!seekEnd())
-      goto writeErrorReturn;
+    setWriteError();
+    return 0;
   }
 
   while (nToWrite > 0)
@@ -1367,7 +1370,10 @@ size_t SdFile::write(const void *buf, uint16_t nbyte)
         {
           // allocate first cluster of file
           if (!addCluster())
-            goto writeErrorReturn;
+          {
+            setWriteError();
+            return 0;
+          }
         }
         else
         {
@@ -1383,7 +1389,10 @@ size_t SdFile::write(const void *buf, uint16_t nbyte)
         {
           // add cluster if at end of chain
           if (!addCluster())
-            goto writeErrorReturn;
+          {
+            setWriteError();
+            return 0;
+          }
         }
         else
         {
@@ -1409,7 +1418,10 @@ size_t SdFile::write(const void *buf, uint16_t nbyte)
         SdVolume::cacheBlockNumber_ = 0XFFFFFFFF;
       }
       if (!vol_->writeBlock(block, src))
-        goto writeErrorReturn;
+      {
+        setWriteError();
+        return 0;
+      }
       src += 512;
     }
     else
@@ -1418,7 +1430,10 @@ size_t SdFile::write(const void *buf, uint16_t nbyte)
       {
         // start of new block don't need to read into cache
         if (!SdVolume::cacheFlush())
-          goto writeErrorReturn;
+        {
+          setWriteError();
+          return 0;
+        }
         SdVolume::cacheBlockNumber_ = block;
         SdVolume::cacheSetDirty();
       }
@@ -1427,7 +1442,8 @@ size_t SdFile::write(const void *buf, uint16_t nbyte)
         // rewrite part of block
         if (!SdVolume::cacheRawBlock(block, SdVolume::CACHE_FOR_WRITE))
         {
-          goto writeErrorReturn;
+          setWriteError();
+          return 0;
         }
       }
       uint8_t *dst = SdVolume::cacheBuffer_.data + blockOffset;
@@ -1450,18 +1466,12 @@ size_t SdFile::write(const void *buf, uint16_t nbyte)
     flags_ |= F_FILE_DIR_DIRTY;
   }
 
-  if (flags_ & O_SYNC)
+  if ((flags_ & O_SYNC) && !sync())
   {
-    if (!sync())
-      goto writeErrorReturn;
+    setWriteError();
+    return 0;
   }
   return nbyte;
-
-writeErrorReturn:
-  // return for write error
-  // writeError = true;
-  setWriteError();
-  return 0;
 }
 //------------------------------------------------------------------------------
 /**
