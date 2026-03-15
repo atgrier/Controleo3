@@ -4,7 +4,7 @@
 
 extern volatile uint32_t *portAOut, *portAMode, *portBOut, *portBMode;
 
-void initOutputs();
+void initOutputs(bool initial);
 void setOutput(uint8_t outputNumber, boolean state);
 boolean getOutput(uint8_t outputNumber);
 void setOvenOutputs(boolean elementsOn, boolean convectionFanOn, boolean coolingFanOn);

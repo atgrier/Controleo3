@@ -462,7 +462,7 @@ redraw:
         // Draw the screen
         displayHeader((char *)"Outputs", true);
         drawIncreaseDecreaseTapTargets(ONE_SETTING_WITH_TEXT);
-        drawNavigationButtons(true, true);
+        drawNavigationButtons(true, false);
         displayString(20, LINE(0), FONT_9PT_BLACK_ON_WHITE, (char *)"Output");
 
         // Allow the user to move between all 6 outputs
@@ -473,6 +473,8 @@ redraw:
           displayString(107, LINE(0), FONT_9PT_BLACK_ON_WHITE, buffer100Bytes);
           tft.fillRect(20, LINE(1), 440, 24, WHITE);
           displayString(20, LINE(1), FONT_9PT_BLACK_ON_WHITE, (char *)longOutputDescription[prefs.outputType[output]]);
+          tft.fillRect(150, 195, 180, 60, WHITE);
+          drawTouchButton(150, 195, 180, 125, BUTTON_SMALL_FONT, (char *)InvertDescription[prefs.outputInvert[output]]);
 
           // Act on the tap
           switch (getTap(SHOW_TEMPERATURE_IN_HEADER)) {
@@ -482,6 +484,11 @@ redraw:
               break;
             case 1:
               prefs.outputType[output] = (prefs.outputType[output] + 1) % NO_OF_TYPES;
+              savePrefs();
+              break;
+            case 6:
+              prefs.outputInvert[output] = !prefs.outputInvert[output];
+              setOutput(output, LOW);
               savePrefs();
               break;
             case 2:
@@ -999,8 +1006,8 @@ void drawIncreaseDecreaseTapTargets(uint8_t targetType) {
     // There is one setting that can be changed on this screen
     renderBitmap(BITMAP_DECREASE_ARROW, 123, targetType == ONE_SETTING_WITH_TEXT ? LINE(3) : LINE(2));
     renderBitmap(BITMAP_INCREASE_ARROW, 270, targetType == ONE_SETTING_WITH_TEXT ? LINE(3) : LINE(2));
-    defineTouchArea(80, LINE(1), 160, targetType == ONE_SETTING_TEXT_BUTTON ? 100 : 140);
-    defineTouchArea(241, LINE(1), 160, targetType == ONE_SETTING_TEXT_BUTTON ? 100 : 140);
+    defineTouchArea(80, LINE(1), 160, targetType == ONE_SETTING_TEXT_BUTTON ? 100 : 110);
+    defineTouchArea(241, LINE(1), 160, targetType == ONE_SETTING_TEXT_BUTTON ? 100 : 110);
   }
 }
 
