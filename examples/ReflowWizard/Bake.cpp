@@ -14,49 +14,12 @@
 #include "Touch.h"
 #include "Utility.h"
 
-// Stay in this function until the bake is done or canceled
-void bake() {
-  uint32_t secondsLeftOfBake, lastLoopTime = millis();
-  uint8_t counter = 0;
-  uint8_t bakePhase = BAKING_PHASE_HEATUP;
-  double currentTemperature = getCurrentTemperature();
-  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS];
-  boolean isOneSecondInterval = false;
-  uint16_t iconsX, i;
-  uint8_t bakeDutyCycle, bakeIntegral = 0, coolingDuration = 0;
-  boolean isHeating = true;
-  long lastOverTempTime = 0;
-  boolean abortDialogIsOnScreen = false;
-
-  // Verify the outputs are configured
-  if (areOutputsConfigured() == false) {
-    showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
-    return;
-  }
-
-  // Initialize varaibles used for baking
-  secondsLeftOfBake = getBakeSeconds(prefs.bakeDuration);
-  // Start with a duty cycle proportional to the desired temperature
-  bakeDutyCycle = map(prefs.bakeTemperature, 0, 250, 0, 100);
-
-  // Calculate the centered position of the heating and fan icons (icons are 32x32)
-  iconsX = 240 - (numOutputsConfigured() * 20) + 4;  // (2*20) - 32 = 8.  8/2 = 4
-
-  // Turn on any convection fans
-  setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_ON, COOLING_FAN_OFF);
-
-  // Stagger the element start cycle to avoid abrupt changes in current draw
-  // Simple method: there are 6 outputs but the first ones are likely the heating elements
-  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
-    elementDutyCounter[i] = (70 * i) % 100;
-
-  // Set up the screen in preparation for baking
-  // Erase the bottom part of the screen
-  tft.fillRect(0, 100, 480, 220, WHITE);
-
-  // Ug, hate goto's!  But this saves a lot of extraneous code.
-userChangedMindAboutAborting:
-
+void _bakeRoutine(
+  uint8_t bakePhase, boolean abortDialogIsOnScreen, uint32_t secondsLeftOfBake,
+  uint32_t lastLoopTime, uint8_t counter, double currentTemperature,
+  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS], boolean isOneSecondInterval, uint16_t iconsX,
+  uint16_t i, uint8_t bakeDutyCycle, uint8_t bakeIntegral, uint8_t coolingDuration,
+  boolean isHeating, long lastOverTempTime) {
   // Setup the tap targets on this screen
   clearTouchTargets();
   drawButton(110, 230, 260, 87, BUTTON_LARGE_FONT, (char *)"STOP");
@@ -108,7 +71,10 @@ userChangedMindAboutAborting:
         abortDialogIsOnScreen = false;
         counter = 0;
         // Redraw the screen under the dialog
-        goto userChangedMindAboutAborting;
+        _bakeRoutine(bakePhase, abortDialogIsOnScreen, secondsLeftOfBake, lastLoopTime, counter,
+                     currentTemperature, elementDutyCounter, isOneSecondInterval, iconsX, i,
+                     bakeDutyCycle, bakeIntegral, coolingDuration, isHeating, lastOverTempTime);
+        return;
     }
 
     // Execute this loop every 20ms (50 times per second)
@@ -333,6 +299,51 @@ userChangedMindAboutAborting:
 
     animateIcons(iconsX);
   }  // end of big while loop
+}
+
+// Stay in this function until the bake is done or canceled
+void bake() {
+  uint32_t secondsLeftOfBake, lastLoopTime = millis();
+  uint8_t counter = 0;
+  uint8_t bakePhase = BAKING_PHASE_HEATUP;
+  double currentTemperature = getCurrentTemperature();
+  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS];
+  boolean isOneSecondInterval = false;
+  uint16_t iconsX, i;
+  uint8_t bakeDutyCycle, bakeIntegral = 0, coolingDuration = 0;
+  boolean isHeating = true;
+  long lastOverTempTime = 0;
+  boolean abortDialogIsOnScreen = false;
+
+  // Verify the outputs are configured
+  if (areOutputsConfigured() == false) {
+    showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
+    return;
+  }
+
+  // Initialize varaibles used for baking
+  secondsLeftOfBake = getBakeSeconds(prefs.bakeDuration);
+  // Start with a duty cycle proportional to the desired temperature
+  bakeDutyCycle = map(prefs.bakeTemperature, 0, 250, 0, 100);
+
+  // Calculate the centered position of the heating and fan icons (icons are 32x32)
+  iconsX = 240 - (numOutputsConfigured() * 20) + 4;  // (2*20) - 32 = 8.  8/2 = 4
+
+  // Turn on any convection fans
+  setOvenOutputs(ELEMENTS_OFF, CONVECTION_FAN_ON, COOLING_FAN_OFF);
+
+  // Stagger the element start cycle to avoid abrupt changes in current draw
+  // Simple method: there are 6 outputs but the first ones are likely the heating elements
+  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
+    elementDutyCounter[i] = (70 * i) % 100;
+
+  // Set up the screen in preparation for baking
+  // Erase the bottom part of the screen
+  tft.fillRect(0, 100, 480, 220, WHITE);
+
+  _bakeRoutine(bakePhase, abortDialogIsOnScreen, secondsLeftOfBake, lastLoopTime, counter,
+               currentTemperature, elementDutyCounter, isOneSecondInterval, iconsX, i,
+               bakeDutyCycle, bakeIntegral, coolingDuration, isHeating, lastOverTempTime);
 }
 
 // Print baking information to the serial port so it can be plotted
