@@ -30,111 +30,17 @@
     logFileOpen = false; \
   }
 
-// Perform a reflow
-// Stay in this function until the reflow is done or canceled
-void reflow(uint8_t profileNo) {
-  uint32_t reflowTimer = 0, countdownTimer = 0, plotSeconds = 0, secondsFromStart = 0, lastLoopTime = millis();
-  uint8_t counter = 0;
-  uint8_t reflowPhase = REFLOW_PHASE_NEXT_COMMAND;
-  double currentTemperature = 0, pidTemperatureDelta = 0, pidTemperature = 0;
-  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS];
-  boolean isOneSecondInterval = false, displayGraph = false;
-  uint16_t iconsX, i, token = NOT_A_TOKEN, numbers[4], maxDuty[4], currentDuty[4], bias[4];
-  boolean isPID = false, incrementTimer = true;
-  boolean abortDialogIsOnScreen = false, logFileOpen = false;
-  uint16_t maxTemperatureDeviation = 20, maxTemperature = 260, desiredTemperature = 0, Kd, maxBias;
-  int16_t pidPower;
-  float pidPreviousError = 0, pidIntegral = 0, pidDerivative, thisError;
-  uint16_t graphMaxTemp = 0, graphMaxSeconds = 0;
-  File logFile;
-
-  // Verify the outputs are configured
-  if (areOutputsConfigured() == false) {
-    showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
-    return;
-  }
-
-  // Make sure learning has completed
-  if (prefs.learningComplete == LEARNING_NOT_DONE) {
-    showHelp(HELP_LEARNING_NOT_DONE);
-    return;
-  }
-
-  // Is SD card logging of time/temperature enabled?
-  if (prefs.logToSDCard) {
-    // Is the SD card inserted?
-    if (digitalRead(A0) == HIGH) {
-      showHelp(HELP_NO_SD_CARD);
-      return;
-    }
-
-    // Open the log file on the SD card
-    // Try initializing twice.  Necessary if good card follows bad one
-    if (!SD.begin() && !SD.begin()) {
-      showHelp(HELP_BAD_FORMAT);
-      return;
-    }
-    SerialUSB.println("SD Card initialized");
-
-    // Open the log file
-    sprintf(buffer100Bytes, "Log%05d.csv", prefs.logNumber);
-    logFile = SD.open(buffer100Bytes, FILE_WRITE);
-    if (!logFile) {
-      SerialUSB.println("Unable to open logging file " + String(buffer100Bytes));
-      showHelp(HELP_CANT_WRITE_TO_SD_CARD);
-      return;
-    }
-
-    // Log file has been successfully opened.  Write the name of the profile to the log file
-    logFileOpen = true;
-    SerialUSB.println("Opened logging file " + String(buffer100Bytes));
-    logFile.println(prefs.profile[profileNo].name);
-
-    // Increment the file number (we don't care about wrap-around from 65536 to 0)
-    prefs.logNumber++;
-    savePrefs();
-  }
-
-  SerialUSB.println("Running profile: " + String(prefs.profile[profileNo].name));
-  SerialUSB.println("Power=" + String(prefs.learnedPower) + "  Inertia=" + String(prefs.learnedInertia) + "  Insulation=" + String(prefs.learnedInsulation));
-
-  // Calculate the centered position of the heating and fan icons (icons are 32x32)
-  iconsX = 240 - (numOutputsConfigured() * 20) + 4;  // (2*20) - 32 = 8.  8/2 = 4
-
-  // Stagger the element start cycle to avoid abrupt changes in current draw
-  // Simple method: there are 6 outputs but the first ones are likely the heating elements
-  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
-    elementDutyCounter[i] = (65 * i) % 100;
-
-  // Default the maximum duty cycles for the elements.  These values can be overwritten by the profile file
-  maxDuty[TYPE_BOTTOM_ELEMENT] = 100;
-  maxDuty[TYPE_TOP_ELEMENT] = 75;
-  maxDuty[TYPE_BOOST_ELEMENT] = 60;
-
-  // Default the current duty cycles for the elements.
-  currentDuty[TYPE_BOTTOM_ELEMENT] = 0;
-  currentDuty[TYPE_TOP_ELEMENT] = 0;
-  currentDuty[TYPE_BOOST_ELEMENT] = 0;
-
-  // Default the bias for the elements.  These values can be overwritten by the profile file
-  bias[TYPE_BOTTOM_ELEMENT] = 100;
-  bias[TYPE_TOP_ELEMENT] = 80;
-  bias[TYPE_BOOST_ELEMENT] = 50;
-  maxBias = 100;
-
-  // Set up the flash reads to start with the first block of this profile
-  if (getNextTokenFromFlash(0, &prefs.profile[profileNo].startBlock) == TOKEN_END_OF_PROFILE) {
-    CLOSE_LOG_FILE;
-    return;
-  }
-
-  // Default the title to the old "Reflow" (the title can be overwritten in the profile)
-  eraseHeader();
-  displayHeader((char *)"Reflow", false);
-
-  // Ug, hate goto's!  But this saves a lot of extraneous code.
-userChangedMindAboutAborting:
-
+void _reflowRoutine(
+  uint32_t reflowTimer, uint32_t countdownTimer, uint32_t plotSeconds, uint32_t secondsFromStart,
+  uint32_t lastLoopTime, uint8_t counter, uint8_t reflowPhase, double currentTemperature,
+  double pidTemperatureDelta, double pidTemperature, uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS],
+  boolean isOneSecondInterval, boolean displayGraph, uint16_t iconsX, uint16_t i, uint16_t token,
+  uint16_t numbers[4], uint16_t maxDuty[4], uint16_t currentDuty[4], uint16_t bias[4],
+  boolean isPID, boolean incrementTimer, boolean abortDialogIsOnScreen, boolean logFileOpen,
+  uint16_t maxTemperatureDeviation, uint16_t maxTemperature, uint16_t desiredTemperature,
+  uint16_t Kd, uint16_t maxBias, int16_t pidPower, float pidPreviousError, float pidIntegral,
+  float pidDerivative, float thisError, uint16_t graphMaxTemp, uint16_t graphMaxSeconds,
+  File logFile) {
   // Erase the bottom part of the screen
   tft.fillRect(0, 100, 480, 230, WHITE);
 
@@ -194,7 +100,14 @@ userChangedMindAboutAborting:
         abortDialogIsOnScreen = false;
         counter = 0;
         // Redraw the screen under the dialog
-        goto userChangedMindAboutAborting;
+        _reflowRoutine(
+          reflowTimer, countdownTimer, plotSeconds, secondsFromStart, lastLoopTime, counter,
+          reflowPhase, currentTemperature, pidTemperatureDelta, pidTemperature, elementDutyCounter,
+          isOneSecondInterval, displayGraph, iconsX, i, token, numbers, maxDuty, currentDuty,
+          bias, isPID, incrementTimer, abortDialogIsOnScreen, logFileOpen, maxTemperatureDeviation,
+          maxTemperature, desiredTemperature, Kd, maxBias, pidPower, pidPreviousError, pidIntegral,
+          pidDerivative, thisError, graphMaxTemp, graphMaxSeconds, logFile);
+        return;
     }
 
     // Execute this loop every 20ms (50 times per second)
@@ -453,8 +366,15 @@ userChangedMindAboutAborting:
             // Don't start plotting until the "start plotting" command
             plotSeconds = graphMaxSeconds + 1;
             // Draw the graph UI
-            goto userChangedMindAboutAborting;
-            break;
+            _reflowRoutine(
+              reflowTimer, countdownTimer, plotSeconds, secondsFromStart, lastLoopTime, counter,
+              reflowPhase, currentTemperature, pidTemperatureDelta, pidTemperature,
+              elementDutyCounter, isOneSecondInterval, displayGraph, iconsX, i, token, numbers,
+              maxDuty, currentDuty, bias, isPID, incrementTimer, abortDialogIsOnScreen, logFileOpen,
+              maxTemperatureDeviation, maxTemperature, desiredTemperature, Kd, maxBias, pidPower,
+              pidPreviousError, pidIntegral, pidDerivative, thisError, graphMaxTemp,
+              graphMaxSeconds, logFile);
+            return;
 
           case TOKEN_GRAPH_DIVIDER:
             if (displayGraph) {
@@ -771,6 +691,117 @@ userChangedMindAboutAborting:
 
     animateIcons(iconsX);
   }  // end of big while loop
+}
+
+// Perform a reflow
+// Stay in this function until the reflow is done or canceled
+void reflow(uint8_t profileNo) {
+  uint32_t reflowTimer = 0, countdownTimer = 0, plotSeconds = 0, secondsFromStart = 0, lastLoopTime = millis();
+  uint8_t counter = 0;
+  uint8_t reflowPhase = REFLOW_PHASE_NEXT_COMMAND;
+  double currentTemperature = 0, pidTemperatureDelta = 0, pidTemperature = 0;
+  uint8_t elementDutyCounter[NUMBER_OF_OUTPUTS];
+  boolean isOneSecondInterval = false, displayGraph = false;
+  uint16_t iconsX, i, token = NOT_A_TOKEN, numbers[4], maxDuty[4], currentDuty[4], bias[4];
+  boolean isPID = false, incrementTimer = true;
+  boolean abortDialogIsOnScreen = false, logFileOpen = false;
+  uint16_t maxTemperatureDeviation = 20, maxTemperature = 260, desiredTemperature = 0, Kd, maxBias;
+  int16_t pidPower;
+  float pidPreviousError = 0, pidIntegral = 0, pidDerivative, thisError;
+  uint16_t graphMaxTemp = 0, graphMaxSeconds = 0;
+  File logFile;
+
+  // Verify the outputs are configured
+  if (areOutputsConfigured() == false) {
+    showHelp(HELP_OUTPUTS_NOT_CONFIGURED);
+    return;
+  }
+
+  // Make sure learning has completed
+  if (prefs.learningComplete == LEARNING_NOT_DONE) {
+    showHelp(HELP_LEARNING_NOT_DONE);
+    return;
+  }
+
+  // Is SD card logging of time/temperature enabled?
+  if (prefs.logToSDCard) {
+    // Is the SD card inserted?
+    if (digitalRead(A0) == HIGH) {
+      showHelp(HELP_NO_SD_CARD);
+      return;
+    }
+
+    // Open the log file on the SD card
+    // Try initializing twice.  Necessary if good card follows bad one
+    if (!SD.begin() && !SD.begin()) {
+      showHelp(HELP_BAD_FORMAT);
+      return;
+    }
+    SerialUSB.println("SD Card initialized");
+
+    // Open the log file
+    sprintf(buffer100Bytes, "Log%05d.csv", prefs.logNumber);
+    logFile = SD.open(buffer100Bytes, FILE_WRITE);
+    if (!logFile) {
+      SerialUSB.println("Unable to open logging file " + String(buffer100Bytes));
+      showHelp(HELP_CANT_WRITE_TO_SD_CARD);
+      return;
+    }
+
+    // Log file has been successfully opened.  Write the name of the profile to the log file
+    logFileOpen = true;
+    SerialUSB.println("Opened logging file " + String(buffer100Bytes));
+    logFile.println(prefs.profile[profileNo].name);
+
+    // Increment the file number (we don't care about wrap-around from 65536 to 0)
+    prefs.logNumber++;
+    savePrefs();
+  }
+
+  SerialUSB.println("Running profile: " + String(prefs.profile[profileNo].name));
+  SerialUSB.println("Power=" + String(prefs.learnedPower) + "  Inertia=" + String(prefs.learnedInertia) + "  Insulation=" + String(prefs.learnedInsulation));
+
+  // Calculate the centered position of the heating and fan icons (icons are 32x32)
+  iconsX = 240 - (numOutputsConfigured() * 20) + 4;  // (2*20) - 32 = 8.  8/2 = 4
+
+  // Stagger the element start cycle to avoid abrupt changes in current draw
+  // Simple method: there are 6 outputs but the first ones are likely the heating elements
+  for (i = 0; i < NUMBER_OF_OUTPUTS; i++)
+    elementDutyCounter[i] = (65 * i) % 100;
+
+  // Default the maximum duty cycles for the elements.  These values can be overwritten by the profile file
+  maxDuty[TYPE_BOTTOM_ELEMENT] = 100;
+  maxDuty[TYPE_TOP_ELEMENT] = 75;
+  maxDuty[TYPE_BOOST_ELEMENT] = 60;
+
+  // Default the current duty cycles for the elements.
+  currentDuty[TYPE_BOTTOM_ELEMENT] = 0;
+  currentDuty[TYPE_TOP_ELEMENT] = 0;
+  currentDuty[TYPE_BOOST_ELEMENT] = 0;
+
+  // Default the bias for the elements.  These values can be overwritten by the profile file
+  bias[TYPE_BOTTOM_ELEMENT] = 100;
+  bias[TYPE_TOP_ELEMENT] = 80;
+  bias[TYPE_BOOST_ELEMENT] = 50;
+  maxBias = 100;
+
+  // Set up the flash reads to start with the first block of this profile
+  if (getNextTokenFromFlash(0, &prefs.profile[profileNo].startBlock) == TOKEN_END_OF_PROFILE) {
+    CLOSE_LOG_FILE;
+    return;
+  }
+
+  // Default the title to the old "Reflow" (the title can be overwritten in the profile)
+  eraseHeader();
+  displayHeader((char *)"Reflow", false);
+
+  _reflowRoutine(
+    reflowTimer, countdownTimer, plotSeconds, secondsFromStart, lastLoopTime, counter, reflowPhase,
+    currentTemperature, pidTemperatureDelta, pidTemperature, elementDutyCounter,
+    isOneSecondInterval, displayGraph, iconsX, i, token, numbers, maxDuty, currentDuty, bias, isPID,
+    incrementTimer, abortDialogIsOnScreen, logFileOpen, maxTemperatureDeviation, maxTemperature,
+    desiredTemperature, Kd, maxBias, pidPower, pidPreviousError, pidIntegral, pidDerivative,
+    thisError, graphMaxTemp, graphMaxSeconds, logFile);
 }
 
 // Draw the STOP/DONE button on the screen
