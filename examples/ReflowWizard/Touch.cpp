@@ -29,15 +29,10 @@ static boolean touchDisplayInCelsius = true;
 
 boolean drawTemperatureOnScreenNow;
 
-// Calibrate the touch screen
-void CalibrateTouchscreen() {
-  uint32_t calibrationStartTime = millis();
-  int16_t i, topLeftX, topLeftY, topRightX, topRightY, bottomLeftX, bottomLeftY, bottomRightX, bottomRightY, centerX, centerY;
-
-  // Clear the screen
-  tft.fillScreen(WHITE);
-
-restart:
+void _calibrationRoutine(
+  uint32_t calibrationStartTime, int16_t i, int16_t topLeftX, int16_t topLeftY, int16_t topRightX,
+  int16_t topRightY, int16_t bottomLeftX, int16_t bottomLeftY, int16_t bottomRightX,
+  int16_t bottomRightY, int16_t centerX, int16_t centerY) {
   while (1) {
     displayString(141, 10, FONT_9PT_BLACK_ON_WHITE, (char *)"Tap the target to");
     displayString(125, 40, FONT_9PT_BLACK_ON_WHITE, (char *)"calibrate the screen");
@@ -195,14 +190,27 @@ restart:
           tft.fillScreen(WHITE);
           // Restart the abort calibration timer
           calibrationStartTime = millis();
-          goto restart;
-        } else {
-          // Done button
+          _calibrationRoutine(
+            calibrationStartTime, i, topLeftX, topLeftY, topRightX, topRightY, bottomLeftX,
+            bottomLeftY, bottomRightX, bottomRightY, centerX, centerY);
           return;
         }
+        return;
       }
     }
   }
+}
+
+// Calibrate the touch screen
+void CalibrateTouchscreen() {
+  uint32_t calibrationStartTime = millis();
+  int16_t i, topLeftX, topLeftY, topRightX, topRightY, bottomLeftX, bottomLeftY, bottomRightX, bottomRightY, centerX, centerY;
+
+  // Clear the screen
+  tft.fillScreen(WHITE);
+  _calibrationRoutine(
+    calibrationStartTime, i, topLeftX, topLeftY, topRightX, topRightY, bottomLeftX, bottomLeftY,
+    bottomRightX, bottomRightY, centerX, centerY);
 }
 
 // Draw the calibration crosshairs on the screen
