@@ -27,9 +27,7 @@
 //
 // This library handles the full range of temperatures, including negative temperatures.
 
-
-#include	"Controleo3MAX31856.h"
-
+#include "Controleo3MAX31856.h"
 
 // Define which pins are connected to the MAX31856.  The DRDY and FAULT outputs
 // from the MAX31856 are not used in this library.
@@ -47,11 +45,10 @@ void Controleo3MAX31856::begin(void)
     digitalWrite(THERMOCOUPLE_CLK, HIGH);
 
     // Set up the shadow registers with the default values
-    byte reg[NUM_REGISTERS] = {0x00,0x03,0xff,0x7f,0xc0,0x7f,0xff,0x80,0,0,0,0};
-    for (int i=0; i<NUM_REGISTERS; i++)
+    byte reg[NUM_REGISTERS] = {0x00, 0x03, 0xff, 0x7f, 0xc0, 0x7f, 0xff, 0x80, 0, 0, 0, 0};
+    for (int i = 0; i < NUM_REGISTERS; i++)
         _registers[i] = reg[i];
 }
-
 
 // Write the given data to the MAX31856 register
 void Controleo3MAX31856::writeRegister(byte registerNum, byte data)
@@ -76,12 +73,11 @@ void Controleo3MAX31856::writeRegister(byte registerNum, byte data)
     _registers[registerNum] = data;
 }
 
-
 // Read the thermocouple temperature either in Degree Celsius or Fahrenheit. Internally,
 // the conversion takes place in the background within 155 ms, or longer depending on the
 // number of samples in each reading (see CR1).
 // Returns the temperature, or an error (FAULT_OPEN, FAULT_VOLTAGE or NO_MAX31856)
-double	Controleo3MAX31856::readThermocouple(byte unit)
+double Controleo3MAX31856::readThermocouple(byte unit)
 {
     double temperature;
     long data;
@@ -100,7 +96,7 @@ double	Controleo3MAX31856::readThermocouple(byte unit)
 
     // If there is no communication from the IC then data will be all 1's because
     // of the internal pullup on the data line (INPUT_PULLUP)
-    if (data == (long) 0xFFFFFFFF)
+    if (data == (long)0xFFFFFFFF)
         return NO_MAX31856;
 
     // If the value is zero then the temperature could be exactly 0.000 (rare), or
@@ -113,29 +109,29 @@ double	Controleo3MAX31856::readThermocouple(byte unit)
         temperature = FAULT_OPEN;
     else if (data & SR_FAULT_UNDER_OVER_VOLTAGE)
         temperature = FAULT_VOLTAGE;
-    else {
+    else
+    {
         // Strip the unused bits and the Fault Status Register
         data = data >> 13;
 
         // Negative temperatures have been automagically handled by the shift above :-)
 
         // Convert to Celsius
-        temperature = (double) data * 0.0078125;
-	
+        temperature = (double)data * 0.0078125;
+
         // Convert to Fahrenheit if desired
         if (unit == FAHRENHEIT)
-            temperature = (temperature * 9.0/5.0)+ 32;
+            temperature = (temperature * 9.0 / 5.0) + 32;
     }
 
     // Return the temperature
     return (temperature);
 }
 
-
 // Read the junction (IC) temperature either in Degree Celsius or Fahrenheit.
 // This routine also makes sure that communication with the MAX31856 is working and
 // will return NO_MAX31856 if not.
-double	Controleo3MAX31856::readJunction(byte unit)
+double Controleo3MAX31856::readJunction(byte unit)
 {
     double temperature;
     long data, temperatureOffset;
@@ -154,7 +150,7 @@ double	Controleo3MAX31856::readJunction(byte unit)
 
     // If there is no communication from the IC then data will be all 1's because
     // of the internal pullup on the data line (INPUT_PULLUP)
-    if (data == (long) 0xFFFFFFFF)
+    if (data == (long)0xFFFFFFFF)
         return NO_MAX31856;
 
     // If the value is zero then the temperature could be exactly 0.000 (rare), or
@@ -183,15 +179,14 @@ double	Controleo3MAX31856::readJunction(byte unit)
 
     // Convert to Celsius
     temperature *= 0.015625;
-	
+
     // Convert to Fahrenheit if desired
     if (unit == FAHRENHEIT)
-        temperature = (temperature * 9.0/5.0)+ 32;
+        temperature = (temperature * 9.0 / 5.0) + 32;
 
     // Return the temperature
     return (temperature);
 }
-
 
 // When the MAX31856 is uninitialzed and either the junction or thermocouple temperature is read it will return 0.
 // This is a valid temperature, but could indicate that the registers need to be initialized.
@@ -213,11 +208,11 @@ double Controleo3MAX31856::verifyMAX31856()
 
     // If there is no communication from the IC then data will be all 1's because
     // of the internal pullup on the data line (INPUT_PULLUP)
-    if (data == (long) 0xFFFFFFFF)
+    if (data == (long)0xFFFFFFFF)
         return NO_MAX31856;
 
     // Are the registers set to their correct values?
-    reg = ((long)_registers[0]<<24) + ((long)_registers[1]<<16) + ((long)_registers[2]<<8) + _registers[3];
+    reg = ((long)_registers[0] << 24) + ((long)_registers[1] << 16) + ((long)_registers[2] << 8) + _registers[3];
     if (reg == data)
         return 0;
 
@@ -229,7 +224,7 @@ double Controleo3MAX31856::verifyMAX31856()
     writeByte(WRITE_OPERATION(0));
 
     // Write the register values
-    for (int i=0; i< NUM_REGISTERS; i++)
+    for (int i = 0; i < NUM_REGISTERS; i++)
         writeByte(_registers[i]);
 
     // Deselect MAX31856 chip
@@ -239,14 +234,13 @@ double Controleo3MAX31856::verifyMAX31856()
     return NO_MAX31856;
 }
 
-
 // Read in 32 bits of data from MAX31856 chip. Minimum clock pulse width is 100 ns
 // so no delay is required between signal toggles.
 long Controleo3MAX31856::readData()
 {
     long data = 0;
     unsigned long bitMask = 0x80000000;
-	
+
     // Shift in 32 bits of data
     while (bitMask)
     {
@@ -260,10 +254,9 @@ long Controleo3MAX31856::readData()
 
         bitMask >>= 1;
     }
-	
-    return(data);
-}
 
+    return (data);
+}
 
 // Write out 8 bits of data to the MAX31856 chip. Minimum clock pulse width is 100 ns
 // so no delay is required between signal toggles.
@@ -275,7 +268,7 @@ void Controleo3MAX31856::writeByte(byte data)
     while (bitMask)
     {
         // Write out the data bit.  Has to be held for 35ns, so no delay required
-        digitalWrite(THERMOCOUPLE_SDI, data & bitMask? HIGH: LOW);
+        digitalWrite(THERMOCOUPLE_SDI, data & bitMask ? HIGH : LOW);
 
         digitalWrite(THERMOCOUPLE_CLK, LOW);
         digitalWrite(THERMOCOUPLE_CLK, HIGH);
@@ -283,4 +276,3 @@ void Controleo3MAX31856::writeByte(byte data)
         bitMask >>= 1;
     }
 }
-
