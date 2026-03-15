@@ -122,7 +122,8 @@ uint8_t Sd2Card::erase(uint32_t firstBlock, uint32_t lastBlock)
     if (!eraseSingleBlockEnable())
     {
         DEBUG_PRINT("Sd2Card::erase - Single block erase not supported");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     if (type_ != SD_CARD_TYPE_SDHC)
     {
@@ -133,17 +134,17 @@ uint8_t Sd2Card::erase(uint32_t firstBlock, uint32_t lastBlock)
     if (cardCommand(CMD32_ERASE_WR_BLK_START, firstBlock) || cardCommand(CMD33_ERASE_WR_BLK_END, lastBlock) || cardCommand(CMD38_ERASE, 0))
     {
         DEBUG_PRINT("Sd2Card::erase - Erase error");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     // Wait for the card to finish the erase
     if (!waitNotBusy(SD_ERASE_TIMEOUT))
     {
         DEBUG_PRINT("Sd2Card::erase - Timeout");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     retVal = true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -189,7 +190,8 @@ uint8_t Sd2Card::init()
         if (((uint16_t)(millis() - t0)) > SD_INIT_TIMEOUT)
         {
             DEBUG_PRINT("Sd2Card::init - Error going idle");
-            goto done;
+            CS_IDLE;
+            return retVal;
         }
     }
 
@@ -204,7 +206,8 @@ uint8_t Sd2Card::init()
         if (status_ != 0XAA)
         {
             DEBUG_PRINT("Sd2Card::init - Error getting interface condition");
-            goto done;
+            CS_IDLE;
+            return retVal;
         }
         type_ = SD_CARD_TYPE_SD2;
     }
@@ -218,17 +221,17 @@ uint8_t Sd2Card::init()
         if (((uint16_t)(millis() - t0)) > SD_INIT_TIMEOUT)
         {
             DEBUG_PRINT("Sd2Card::init - ACMD41 timeout");
-            goto next;
+            break;
         }
     }
-next:
     // If SD2 read the OCR register to check for SDHC card
     if (type_ == SD_CARD_TYPE_SD2)
     {
         if (cardCommand(CMD58_READ_OCR, 0))
         {
             DEBUG_PRINT("Sd2Card::init - Read OCR error");
-            goto done;
+            CS_IDLE;
+            return retVal;
         }
         if ((spiRec() & 0XC0) == 0XC0)
             type_ = SD_CARD_TYPE_SDHC;
@@ -237,8 +240,6 @@ next:
             spiRec();
     }
     retVal = true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -266,10 +267,14 @@ uint8_t Sd2Card::readData(uint32_t block, uint16_t offset, uint16_t count, uint8
     if (cardCommand(CMD17_READ_BLOCK, block))
     {
         DEBUG_PRINT("Sd2Card::readData - read error");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     if (!waitStartBlock())
-        goto done;
+    {
+        CS_IDLE;
+        return retVal;
+    }
 
     // Skip data before offset
     for (offset_ = 0; offset_ < offset; offset_++)
@@ -285,8 +290,6 @@ uint8_t Sd2Card::readData(uint32_t block, uint16_t offset, uint16_t count, uint8
         spiRec();
 
     retVal = true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -299,18 +302,20 @@ uint8_t Sd2Card::readRegister(uint8_t cmd, void *buf)
     if (cardCommand(cmd, 0))
     {
         DEBUG_PRINT("Sd2Card::readRegister - Error reading register");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     if (!waitStartBlock())
-        goto done;
+    {
+        CS_IDLE;
+        return retVal;
+    }
     // Transfer data
     for (uint16_t i = 0; i < 16; i++)
         dst[i] = spiRec();
     spiRec(); // Get crc bytes
     spiRec();
     retVal = true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -337,18 +342,18 @@ uint8_t Sd2Card::waitStartBlock(void)
         if (((uint16_t)millis() - t0) > SD_READ_TIMEOUT)
         {
             DEBUG_PRINT("Sd2Card::waitStartBlock - read timeout");
-            goto done;
+            CS_IDLE;
+            return retVal;
         }
     }
     if (status_ != DATA_START_BLOCK)
     {
         DEBUG_PRINT("Sd2Card::waitStartBlock - read error");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     // Keep CS low
     return true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -363,7 +368,8 @@ uint8_t Sd2Card::writeBlock(uint32_t blockNumber, const uint8_t *src)
     if (blockNumber == 0)
     {
         DEBUG_PRINT("Sd2Card::writeBlock - Can't write to block 0");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
 
     // Use address if not SDHC card
@@ -373,28 +379,32 @@ uint8_t Sd2Card::writeBlock(uint32_t blockNumber, const uint8_t *src)
     if (cardCommand(CMD24_WRITE_BLOCK, blockNumber))
     {
         DEBUG_PRINT("Sd2Card::writeBlock - Can't write block start");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
 
     if (!writeData(DATA_START_BLOCK, src))
-        goto done;
+    {
+        CS_IDLE;
+        return retVal;
+    }
 
     // Wait for flash programming to complete
     if (!waitNotBusy(SD_WRITE_TIMEOUT))
     {
         DEBUG_PRINT("Sd2Card::writeBlock - Write timeout");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
 
     // Response is R2 so get and check two bytes for nonzero
     if (cardCommand(CMD13_SEND_STATUS, 0) || spiRec())
     {
         DEBUG_PRINT("Sd2Card::writeBlock - Write error");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     retVal = true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -444,13 +454,15 @@ uint8_t Sd2Card::writeStart(uint32_t blockNumber, uint32_t eraseCount)
     if (blockNumber == 0)
     {
         DEBUG_PRINT("Sd2Card::writeStart - Can't write block 0");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     // Send pre-erase count
     if (cardAcmd(ACMD23_SET_WR_BLK_ERASE_COUNT, eraseCount))
     {
         DEBUG_PRINT("Sd2Card::writeStart - Pre-erase error");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     // Use address if not SDHC card
     if (type() != SD_CARD_TYPE_SDHC)
@@ -458,12 +470,11 @@ uint8_t Sd2Card::writeStart(uint32_t blockNumber, uint32_t eraseCount)
     if (cardCommand(CMD25_WRITE_MULTIPLE_BLOCK, blockNumber))
     {
         DEBUG_PRINT("Sd2Card::writeStart - error");
-        goto done;
+        CS_IDLE;
+        return retVal;
     }
     // Keep CS low
     return true;
-
-done:
     CS_IDLE;
     return retVal;
 }
@@ -474,13 +485,17 @@ uint8_t Sd2Card::writeStop(void)
     SerialUSB.print("Sd2Card::writeStop - writing block ");
     boolean retVal = false;
     if (!waitNotBusy(SD_WRITE_TIMEOUT))
-        goto done;
+    {
+        CS_IDLE;
+        return retVal;
+    }
     spiSend(STOP_TRAN_TOKEN);
     if (!waitNotBusy(SD_WRITE_TIMEOUT))
-        goto done;
+    {
+        CS_IDLE;
+        return retVal;
+    }
     retVal = true;
-
-done:
     CS_IDLE;
     return retVal;
 }
